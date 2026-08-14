@@ -174,6 +174,13 @@
   .card.collapsed h3{margin-bottom:0;}
 }
 
+/* ============ 添加区折叠 ============ */
+.add-toggle{display:inline-flex;align-items:center;gap:5px;margin:12px 0 2px;font-size:13px;font-weight:600;
+  color:var(--work);background:#eef4ff;border:none;border-radius:9px;padding:8px 13px;cursor:pointer;}
+.add-toggle:hover{background:#e2ecff;}
+.add-zone{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;}
+.add-zone .form:first-child{margin-top:0;}
+
 /* ============ 待办已完成折叠 ============ */
 .done-fold{margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;
   font-size:14px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;background:#fbfcfe;}
@@ -223,6 +230,28 @@
     <button class="btn ghost mini" id="btnSyncNow">立即同步</button>
   </div>
 
+  <!-- 日历 & 天气（置顶·默认折叠） -->
+  <section class="card collapsed">
+    <h3 onclick="toggleCard(this)">🌤️ 今日日历 & 天气<span class="caret">▾</span></h3>
+    <div class="cal-head">
+      <div class="mon" id="calMon"></div>
+      <div class="cal-nav">
+        <button id="calPrev">‹</button>
+        <button id="calToday">今</button>
+        <button id="calNext">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="lh-panel" id="lhPanel"></div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:13px;color:var(--muted);">实时气温</div>
+      <button class="btn ghost mini" id="wxRefresh">刷新</button>
+    </div>
+    <div class="wx" id="wxBox" style="margin-top:8px;"></div>
+  </section>
+
   <!-- 今天要处理 -->
   <section class="today">
     <h2>📌 今天要处理</h2>
@@ -232,58 +261,39 @@
 
   <div class="grid">
 
-    <!-- 日历 & 天气（置顶·默认折叠） -->
-    <section class="card collapsed">
-      <h3 onclick="toggleCard(this)">🌤️ 今日日历 & 天气<span class="caret">▾</span></h3>
-      <div class="cal-head">
-        <div class="mon" id="calMon"></div>
-        <div class="cal-nav">
-          <button id="calPrev">‹</button>
-          <button id="calToday">今</button>
-          <button id="calNext">›</button>
-        </div>
-      </div>
-      <div class="cal-grid" id="calGrid"></div>
-
-      <div class="lh-panel" id="lhPanel"></div>
-
-      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;color:var(--muted);">实时气温</div>
-        <button class="btn ghost mini" id="wxRefresh">刷新</button>
-      </div>
-      <div class="wx" id="wxBox" style="margin-top:8px;"></div>
-    </section>
-
     <!-- 模块1：今日日程 -->
     <section class="card">
       <h3 onclick="toggleCard(this)">🗓️ 今日日程 <span class="count" id="schCount"></span><span class="caret">▾</span></h3>
-      <div class="form">
-        <input class="grow" id="schTitle" placeholder="日程内容（如：项目例会）">
-        <input type="date" id="schDate">
-        <input type="time" id="schTime">
-        <select id="schType">
-          <option value="work">工作</option>
-          <option value="life">生活</option>
-        </select>
-        <select id="schRepeat">
-          <option value="none">不重复</option>
-          <option value="daily">每天</option>
-          <option value="weekday">每工作日(周一~五)</option>
-          <option value="week1">每周一</option>
-          <option value="week2">每周二</option>
-          <option value="week3">每周三</option>
-          <option value="week4">每周四</option>
-          <option value="week5">每周五</option>
-          <option value="week6">每周六</option>
-          <option value="week7">每周日</option>
-          <option value="biweekly">每2周</option>
-          <option value="monthly">每月(同日期)</option>
-        </select>
-        <button class="btn" id="schAdd">添加</button>
-        <button class="btn ghost" id="schCancel" style="display:none">取消</button>
-      </div>
-      <div class="form">
-        <input class="grow" id="schNote" placeholder="备注（选填）">
+      <button class="add-toggle" onclick="toggleAddZone('schAddZone')">＋ 新建日程</button>
+      <div class="add-zone hidden" id="schAddZone">
+        <div class="form">
+          <input class="grow" id="schTitle" placeholder="日程内容（如：项目例会）">
+          <input type="date" id="schDate">
+          <input type="time" id="schTime">
+          <select id="schType">
+            <option value="work">工作</option>
+            <option value="life">生活</option>
+          </select>
+          <select id="schRepeat">
+            <option value="none">不重复</option>
+            <option value="daily">每天</option>
+            <option value="weekday">每工作日(周一~五)</option>
+            <option value="week1">每周一</option>
+            <option value="week2">每周二</option>
+            <option value="week3">每周三</option>
+            <option value="week4">每周四</option>
+            <option value="week5">每周五</option>
+            <option value="week6">每周六</option>
+            <option value="week7">每周日</option>
+            <option value="biweekly">每2周</option>
+            <option value="monthly">每月(同日期)</option>
+          </select>
+          <button class="btn" id="schAdd">添加</button>
+          <button class="btn ghost" id="schCancel" style="display:none">取消</button>
+        </div>
+        <div class="form">
+          <input class="grow" id="schNote" placeholder="备注（选填）">
+        </div>
       </div>
       <div class="list" id="schList"></div>
     </section>
@@ -291,23 +301,26 @@
     <!-- 模块2：待办清单 -->
     <section class="card collapsed">
       <h3 onclick="toggleCard(this)">✅ 待办清单 <span class="count" id="todoCount"></span><span class="caret">▾</span></h3>
-      <div class="form">
-        <input class="grow" id="todoTitle" placeholder="待办事项">
-        <select id="todoCat">
-          <option value="work">工作</option>
-          <option value="life">生活</option>
-          <option value="future">未来(不急)</option>
-        </select>
-        <select id="todoPri">
-          <option value="P0">P0 紧急</option>
-          <option value="P1" selected>P1 重要</option>
-          <option value="P2">P2 一般</option>
-        </select>
-      </div>
-      <div class="form">
-        <input type="date" id="todoDue" class="grow" placeholder="截止日期">
-        <button class="btn" id="todoAdd">添加</button>
-        <button class="btn ghost" id="todoCancel" style="display:none">取消</button>
+      <button class="add-toggle" onclick="toggleAddZone('todoAddZone')">＋ 新建待办</button>
+      <div class="add-zone hidden" id="todoAddZone">
+        <div class="form">
+          <input class="grow" id="todoTitle" placeholder="待办事项">
+          <select id="todoCat">
+            <option value="work">工作</option>
+            <option value="life">生活</option>
+            <option value="future">未来(不急)</option>
+          </select>
+          <select id="todoPri">
+            <option value="P0">P0 紧急</option>
+            <option value="P1" selected>P1 重要</option>
+            <option value="P2">P2 一般</option>
+          </select>
+        </div>
+        <div class="form">
+          <input type="date" id="todoDue" class="grow" placeholder="截止日期">
+          <button class="btn" id="todoAdd">添加</button>
+          <button class="btn ghost" id="todoCancel" style="display:none">取消</button>
+        </div>
       </div>
       <div class="row" style="margin-bottom:10px;">
         <button class="btn ghost mini" data-f="all">全部</button>
@@ -322,13 +335,16 @@
     <!-- 模块3：随手备忘 -->
     <section class="card collapsed">
       <h3 onclick="toggleCard(this)">📝 随手备忘 <span class="count" id="noteCount"></span><span class="caret">▾</span></h3>
-      <div class="form">
-        <textarea id="noteContent" rows="2" placeholder="灵感、琐事、临时记事……"></textarea>
-      </div>
-      <div class="form">
-        <input class="grow" id="noteTag" placeholder="标签（选填，如：工作/购物/想法）">
-        <button class="btn" id="noteAdd">记一笔</button>
-        <button class="btn ghost" id="noteCancel" style="display:none">取消</button>
+      <button class="add-toggle" onclick="toggleAddZone('noteAddZone')">＋ 记一笔备忘</button>
+      <div class="add-zone hidden" id="noteAddZone">
+        <div class="form">
+          <textarea id="noteContent" rows="2" placeholder="灵感、琐事、临时记事……"></textarea>
+        </div>
+        <div class="form">
+          <input class="grow" id="noteTag" placeholder="标签（选填，如：工作/购物/想法）">
+          <button class="btn" id="noteAdd">记一笔</button>
+          <button class="btn ghost" id="noteCancel" style="display:none">取消</button>
+        </div>
       </div>
       <div class="list" id="noteList"></div>
     </section>
@@ -336,47 +352,50 @@
     <!-- 模块5：会员卡 / 自动续费 -->
     <section class="card collapsed">
       <h3 onclick="toggleCard(this)">💳 会员卡 / 自动续费 <span class="count" id="memCount"></span><span class="caret">▾</span></h3>
-      <div class="form">
-        <select id="memType">
-          <option value="auto">自动续费卡</option>
-          <option value="recharge">充值卡（预付费·不自动续）</option>
-        </select>
-      </div>
-      <div class="form">
-        <input class="grow" id="memName" placeholder="名称（如：爱奇艺VIP / 狗洗澡卡）">
-        <select id="memCat">
-          <option value="影音">影音</option>
-          <option value="健身">健身</option>
-          <option value="宠物">宠物</option>
-          <option value="读书">读书</option>
-          <option value="工具">工具</option>
-          <option value="其他">其他</option>
-        </select>
-        <button class="btn" id="memAdd">添加</button>
-        <button class="btn ghost" id="memCancel" style="display:none">取消</button>
-      </div>
-      <!-- 自动续费卡字段 -->
-      <div class="form" id="memAutoFields">
-        <input type="number" id="memAmount" placeholder="金额¥" min="0" step="0.01" style="max-width:110px;">
-        <select id="memCycle">
-          <option value="month">月付</option>
-          <option value="quarter">季付</option>
-          <option value="year">年付</option>
-        </select>
-        <input type="date" id="memNext" class="grow" placeholder="下次续费日">
-        <select id="memAuto">
-          <option value="on">自动续费：开</option>
-          <option value="off">自动续费：关</option>
-        </select>
-      </div>
-      <!-- 充值卡（预付费）字段 -->
-      <div class="form hidden" id="memRechargeFields">
-        <input type="number" id="memCharge" placeholder="充值总额¥" min="0" step="0.01" style="max-width:120px;">
-        <input type="date" id="memChargeDate" class="grow" placeholder="充值时间">
-        <input type="date" id="memExpire" class="grow" placeholder="使用期限（到期日）">
-      </div>
-      <div class="form">
-        <input class="grow" id="memNote" placeholder="备注（选填，如：绑定的卡/账号）">
+      <button class="add-toggle" onclick="toggleAddZone('memAddZone')">＋ 添加会员卡</button>
+      <div class="add-zone hidden" id="memAddZone">
+        <div class="form">
+          <select id="memType">
+            <option value="auto">自动续费卡</option>
+            <option value="recharge">充值卡（预付费·不自动续）</option>
+          </select>
+        </div>
+        <div class="form">
+          <input class="grow" id="memName" placeholder="名称（如：爱奇艺VIP / 狗洗澡卡）">
+          <select id="memCat">
+            <option value="影音">影音</option>
+            <option value="健身">健身</option>
+            <option value="宠物">宠物</option>
+            <option value="读书">读书</option>
+            <option value="工具">工具</option>
+            <option value="其他">其他</option>
+          </select>
+          <button class="btn" id="memAdd">添加</button>
+          <button class="btn ghost" id="memCancel" style="display:none">取消</button>
+        </div>
+        <!-- 自动续费卡字段 -->
+        <div class="form" id="memAutoFields">
+          <input type="number" id="memAmount" placeholder="金额¥" min="0" step="0.01" style="max-width:110px;">
+          <select id="memCycle">
+            <option value="month">月付</option>
+            <option value="quarter">季付</option>
+            <option value="year">年付</option>
+          </select>
+          <input type="date" id="memNext" class="grow" placeholder="下次续费日">
+          <select id="memAuto">
+            <option value="on">自动续费：开</option>
+            <option value="off">自动续费：关</option>
+          </select>
+        </div>
+        <!-- 充值卡（预付费）字段 -->
+        <div class="form hidden" id="memRechargeFields">
+          <input type="number" id="memCharge" placeholder="充值总额¥" min="0" step="0.01" style="max-width:120px;">
+          <input type="date" id="memChargeDate" class="grow" placeholder="充值时间">
+          <input type="date" id="memExpire" class="grow" placeholder="使用期限（到期日）">
+        </div>
+        <div class="form">
+          <input class="grow" id="memNote" placeholder="备注（选填，如：绑定的卡/账号）">
+        </div>
       </div>
       <div class="list" id="memList"></div>
     </section>
@@ -986,6 +1005,8 @@ function delConsume(id,recId){
   save('members',members);renderMembers();
 }
 function toggleCard(h){var c=h.closest('.card');if(c)c.classList.toggle('collapsed');}
+function toggleAddZone(zoneId){var z=document.getElementById(zoneId);if(z)z.classList.toggle('hidden');}
+function showAddZone(zoneId){var z=document.getElementById(zoneId);if(z)z.classList.remove('hidden');}
 
 /* ============ 渲染：日历 ============ */
 var calY=new Date().getFullYear(),calM=new Date().getMonth()+1;
@@ -1072,6 +1093,7 @@ function editSch(id){
   document.getElementById('schNote').value=s.note||'';
   document.getElementById('schAdd').textContent='保存修改';
   document.getElementById('schCancel').style.display='';
+  showAddZone('schAddZone');
   document.getElementById('schTitle').focus();
 }
 document.getElementById('schAdd').onclick=function(){
@@ -1108,6 +1130,7 @@ function editTodo(id){
   document.getElementById('todoDue').value=o.due||'';
   document.getElementById('todoAdd').textContent='保存修改';
   document.getElementById('todoCancel').style.display='';
+  showAddZone('todoAddZone');
   document.getElementById('todoTitle').focus();
 }
 document.getElementById('todoAdd').onclick=function(){
@@ -1137,6 +1160,7 @@ function editNote(id){
   document.getElementById('noteTag').value=n.tag||'';
   document.getElementById('noteAdd').textContent='保存修改';
   document.getElementById('noteCancel').style.display='';
+  showAddZone('noteAddZone');
   document.getElementById('noteContent').focus();
 }
 document.getElementById('noteAdd').onclick=function(){
@@ -1197,6 +1221,7 @@ function editMem(id){
   document.getElementById('memAdd').textContent='保存修改';
   document.getElementById('memCancel').style.display='';
   syncMemTypeFields();
+  showAddZone('memAddZone');
   document.getElementById('memName').focus();
 }
 function delMem(id){members=members.filter(function(x){return x.id!==id;});save('members',members);renderAll();}

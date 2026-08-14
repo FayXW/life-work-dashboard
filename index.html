@@ -55,6 +55,11 @@
   .today.collapsed .caret{transform:rotate(-90deg);}
   .today.collapsed .today-body{display:none;}
   .mem-group-label{font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px;padding-left:2px;}
+  .mem-group-label.sub{margin-left:8px;padding-left:8px;border-left:3px solid var(--line);}
+  .mem-track-label{font-size:13px;font-weight:700;color:var(--ink);margin:14px 0 6px;padding:7px 10px;background:#eef2fb;border-radius:9px;display:flex;align-items:center;gap:6px;}
+  .mem-track-label.work{background:#eaf1ff;}
+  .mem-track-label .cnt{font-size:12px;font-weight:600;color:var(--muted);margin-left:auto;}
+  .mem-cat-tag{font-size:11px;color:var(--muted);background:#f1f3f7;border-radius:6px;padding:1px 6px;}
   .titem{
     display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
     background:#fff;border:1px solid var(--line);margin-bottom:8px;
@@ -408,6 +413,14 @@
           <button class="btn" id="memAdd">添加</button>
           <button class="btn ghost" id="memCancel" style="display:none">取消</button>
         </div>
+        <!-- 归属：生活 / 工作（与充值卡/自动续费卡分组逻辑一致的拆分维度） -->
+        <div class="form">
+          <span class="inlbl">归属</span>
+          <select id="memTrack">
+            <option value="life">🏠 生活</option>
+            <option value="work">💼 工作</option>
+          </select>
+        </div>
         <!-- 自动续费卡字段 -->
         <div class="form" id="memAutoFields">
           <input type="number" id="memAmount" placeholder="金额¥" min="0" step="0.01" style="max-width:110px;">
@@ -535,9 +548,9 @@ if(!has('seeded')){
     {id:uid(),content:'老妈生日快到了，记得提前订蛋糕。',tag:'生活',created:Date.now()}
   ];
   members=[
-    {id:uid(),name:'爱奇艺黄金VIP',cat:'影音',amount:25,rUnit:'month',rNum:1,nextRenew:'2026-08-15',auto:'on',note:'微信自动扣费'},
-    {id:uid(),name:'健身房年卡',cat:'健身',amount:2680,rUnit:'year',rNum:1,nextRenew:'2026-12-01',auto:'off',note:'到期前需主动续'},
-    {id:uid(),name:'网易云音乐',cat:'影音',amount:15,rUnit:'month',rNum:1,nextRenew:'2026-09-01',auto:'on',note:''}
+    {id:uid(),name:'爱奇艺黄金VIP',cat:'影音',track:'life',amount:25,rUnit:'month',rNum:1,nextRenew:'2026-08-15',auto:'on',note:'微信自动扣费'},
+    {id:uid(),name:'健身房年卡',cat:'健身',track:'work',amount:2680,rUnit:'year',rNum:1,nextRenew:'2026-12-01',auto:'off',note:'到期前需主动续'},
+    {id:uid(),name:'网易云音乐',cat:'影音',track:'life',amount:15,rUnit:'month',rNum:1,nextRenew:'2026-09-01',auto:'on',note:''}
   ];
   save('schedules',schedules);save('todos',todos);save('notes',notes);save('members',members);save('seeded',true);
 }
@@ -898,7 +911,7 @@ function renderToday(){
       var mPillTxt=it.overdue?'逾期续费':'即将续费';
       html+='<div class="titem'+(it.overdue?' overdue':'')+'"><div class="ic" style="background:var(--future-soft)">💳</div>'+
         '<div class="body"><div class="t1">'+esc(o.name)+'</div>'+
-        '<div class="t2">'+esc(o.cat)+' · ¥'+esc(o.amount)+' '+renewLabel(o)+' · 续费 '+esc(o.nextRenew)+'（'+cnt+'）'+(o.auto==='on'?' · 自动':'')+'</div></div>'+
+        '<div class="t2">'+(o.track==='work'?'工作':'生活')+' · ¥'+esc(o.amount)+' '+renewLabel(o)+' · 续费 '+esc(o.nextRenew)+'（'+cnt+'）'+(o.auto==='on'?' · 自动':'')+'</div></div>'+
         '<span class="pill '+mPill+'">'+mPillTxt+'</span>'+
         '<button class="btn ghost mini act" onclick="renewed(\''+o.id+'\')">已续费</button></div>';
     }
@@ -1061,6 +1074,17 @@ function renderNotes(){
 /* ============ 渲染：会员卡 / 自动续费 ============ */
 var memRecsOpen=new Set();   // 已展开消费记录的充值卡 id
 var editingConsume=null;     // 正在编辑的消费记录 {memId,recId}
+/* 旧数据没有 track 字段时，按 cat 启发式回填：健身/工具→工作，其余→生活；仅当确有变化时落盘 */
+function migrateMembers(){
+  var changed=false;
+  members.forEach(function(m){
+    if(m.track!=='life'&&m.track!=='work'){
+      m.track=(m.cat==='健身'||m.cat==='工具')?'work':'life';
+      changed=true;
+    }
+  });
+  if(changed)save('members',members);
+}
 function memBalance(m){
   var charge=parseFloat(m.chargeAmount)||0;
   var spent=(m.records||[]).reduce(function(s,r){return s+(parseFloat(r.amount)||0);},0);
@@ -1069,26 +1093,37 @@ function memBalance(m){
 function renderMembers(){
   var box=document.getElementById('memList');
   var all=members.slice();
-  var rech=all.filter(function(m){return m.type==='recharge';});
-  var auto=all.filter(function(m){return m.type!=='recharge';});
   function byName(a,b){return (a.name||'').localeCompare(b.name||'');}
-  rech.sort(byName);auto.sort(byName);
+  /* 先按 生活/工作 拆分（与充值卡/自动续费卡的分开逻辑一致：可见分组标签） */
+  var life=all.filter(function(m){return (m.track||'life')!=='work';}).sort(byName);
+  var work=all.filter(function(m){return (m.track||'life')==='work';}).sort(byName);
   document.getElementById('memCount').textContent=all.length+' 张';
   if(all.length===0){box.innerHTML='<div class="empty">还没有会员卡，添加一张吧～</div>';return;}
-  var mixed=(rech.length>0&&auto.length>0);
+  /* 组内再按 充值卡/自动续费卡 拆分 */
+  function groupOf(arr){
+    var rech=arr.filter(function(m){return m.type==='recharge';});
+    var auto=arr.filter(function(m){return m.type!=='recharge';});
+    var mixed=(rech.length>0&&auto.length>0);
+    var s='';
+    if(mixed)s+='<div class="mem-group-label sub">💰 充值卡（'+rech.length+'）</div>';
+    rech.forEach(function(m){s+=memItemHtml(m);});
+    if(mixed)s+='<div class="mem-group-label sub">🔁 自动续费卡（'+auto.length+'）</div>';
+    auto.forEach(function(m){s+=memItemHtml(m);});
+    return s;
+  }
   var html='';
-  if(mixed)html+='<div class="mem-group-label">💰 充值卡（'+rech.length+'）</div>';
-  rech.forEach(function(m){html+=memItemHtml(m);});
-  if(mixed)html+='<div class="mem-group-label">🔁 自动续费卡（'+auto.length+'）</div>';
-  auto.forEach(function(m){html+=memItemHtml(m);});
+  if(life.length)html+='<div class="mem-track-label">🏠 生活<span class="cnt">'+life.length+' 张</span></div>'+groupOf(life);
+  if(work.length)html+='<div class="mem-track-label work">💼 工作<span class="cnt">'+work.length+' 张</span></div>'+groupOf(work);
   box.innerHTML=html;
 }
 function memItemHtml(m){
   var isR=(m.type==='recharge');
-  var catCls=m.cat==='影音'?'life':(m.cat==='健身'?'work':'future');
+  var isWork=(m.track==='work');
+  var trackCls=isWork?'work':'life';
   var html='<div class="li"><div class="li-body"><div class="li-title">'+esc(m.name)+
     ' <span class="mem-type-tag '+(isR?'recharge':'auto')+'">'+(isR?'充值卡':'自动续费卡')+'</span></div>'+
-    '<div class="li-meta"><span class="pill '+catCls+'">'+esc(m.cat||'其他')+'</span>';
+    '<div class="li-meta"><span class="pill '+trackCls+'">'+(isWork?'工作':'生活')+'</span>'+
+    (m.cat&&m.cat!=='其他'?'<span class="mem-cat-tag">'+esc(m.cat)+'</span>':'');
   if(isR){
     var bal=memBalance(m);
     html+='<span class="mem-balance">余额 ¥'+esc(bal)+'</span>'+
@@ -1372,6 +1407,7 @@ function resetMemForm(){
   document.getElementById('memNum').value='1';
   document.getElementById('memUnit').value='month';
   document.getElementById('memCat').value='影音';
+  document.getElementById('memTrack').value='life';
   document.getElementById('memNext').value='';
   document.getElementById('memAuto').value='on';
   document.getElementById('memCharge').value='';
@@ -1390,6 +1426,7 @@ function editMem(id){
   document.getElementById('memType').value=typ;
   document.getElementById('memName').value=m.name;
   document.getElementById('memCat').value=m.cat||'影音';
+  document.getElementById('memTrack').value=(m.track==='work')?'work':'life';
   document.getElementById('memNote').value=m.note||'';
   if(typ==='recharge'){
     document.getElementById('memCharge').value=m.chargeAmount||'';
@@ -1416,11 +1453,12 @@ document.getElementById('memAdd').onclick=function(){
   if(!n)return;
   var typ=document.getElementById('memType').value;
   var cat=document.getElementById('memCat').value;
+  var track=document.getElementById('memTrack').value;
   var note=document.getElementById('memNote').value.trim();
   if(memEditing){
     var m=members.find(function(x){return x.id===memEditing;});
     if(m){
-      m.name=n;m.cat=cat;m.note=note;m.type=typ;
+      m.name=n;m.cat=cat;m.track=track;m.note=note;m.type=typ;
       if(typ==='recharge'){
         m.chargeAmount=parseFloat(document.getElementById('memCharge').value)||0;
         m.chargeDate=document.getElementById('memChargeDate').value||'';
@@ -1437,7 +1475,7 @@ document.getElementById('memAdd').onclick=function(){
       }
     }
   }else{
-    var base={id:uid(),name:n,cat:cat,note:note,type:typ};
+    var base={id:uid(),name:n,cat:cat,track:track,note:note,type:typ};
     if(typ==='recharge'){
       base.chargeAmount=parseFloat(document.getElementById('memCharge').value)||0;
       base.chargeDate=document.getElementById('memChargeDate').value||'';
@@ -1797,7 +1835,8 @@ function classifyLine(line){
     name=name.replace(/\s+/g,'').trim();
     if(amt)name=name.replace(new RegExp('\\s*'+amt+'\\s*'),'').replace(/\s+/g,'').trim();
     if(!name)name='未命名会员';
-    return {type:'mem',sub:sub,rUnit:rUnit,rNum:rNum,amount:amt,date:date,name:name,note:''};
+    var memTrack=/健身|工具|办公|工作|企业|公司|差旅|商务/.test(line)?'work':'life';
+    return {type:'mem',sub:sub,rUnit:rUnit,rNum:rNum,amount:amt,date:date,name:name,note:'',track:memTrack};
   }
   if(todoKw.test(line)){
     var cat=/生活|个人|家里|家人|买|购物|健身|宠物|狗|猫|旅行|旅游|体检|就医|玩/.test(line)?'life':'work';
@@ -1839,7 +1878,8 @@ function renderQuickPreview(){
     }else{
       html+='<input class="grow" id="qf_name_'+idx+'" value="'+esc(it.name||'')+'" placeholder="名称" onchange="qiField('+idx+',\'name\',this.value)">'+
         '<select id="qf_sub_'+idx+'" onchange="qiSubChange('+idx+',this.value)"><option value="auto"'+(it.sub==='auto'?' selected':'')+'>自动续费卡</option><option value="recharge"'+(it.sub==='recharge'?' selected':'')+'>充值卡</option></select>'+
-        '<input type="number" id="qf_amount_'+idx+'" value="'+esc(it.amount||'')+'" placeholder="金额" min="0" step="0.01" onchange="qiField('+idx+',\'amount\',this.value)">';
+        '<input type="number" id="qf_amount_'+idx+'" value="'+esc(it.amount||'')+'" placeholder="金额" min="0" step="0.01" onchange="qiField('+idx+',\'amount\',this.value)">'+
+        '<select id="qf_track_'+idx+'" onchange="qiField('+idx+',\'track\',this.value)"><option value="life"'+(it.track!=='work'?' selected':'')+'>🏠 生活</option><option value="work"'+(it.track==='work'?' selected':'')+'>💼 工作</option></select>';
       if(it.sub==='auto'){
         html+='<span class="inlbl">每</span><input type="number" id="qf_num_'+idx+'" value="'+(it.rNum||1)+'" min="1" max="365" class="qf-num" onchange="qiField('+idx+',\'rNum\',this.value)">'+
           '<select id="qf_unit_'+idx+'" onchange="qiField('+idx+',\'rUnit\',this.value)"><option value="day"'+(it.rUnit==='day'?' selected':'')+'>天</option><option value="week"'+(it.rUnit==='week'?' selected':'')+'>周</option><option value="month"'+(it.rUnit!=='day'&&it.rUnit!=='week'&&it.rUnit!=='year'?' selected':'')+'>个月</option><option value="year"'+(it.rUnit==='year'?' selected':'')+'>年</option></select>'+
@@ -1861,7 +1901,7 @@ function qiRemove(i){parsedItems.splice(i,1);renderQuickPreview();}
 function qiReclass(i,v){
   var it=parsedItems[i];if(!it)return;
   it.type=v;
-  if(v==='mem'&&!it.name){it.name=it.title||'';it.sub=it.sub||'recharge';it.rUnit=it.rUnit||'month';it.rNum=it.rNum||1;if(!it.amount)it.amount=0;}
+  if(v==='mem'&&!it.name){it.name=it.title||'';it.sub=it.sub||'recharge';it.rUnit=it.rUnit||'month';it.rNum=it.rNum||1;if(!it.amount)it.amount=0;if(!it.track)it.track='life';}
   if(v==='sch'&&!it.schType)it.schType='work';
   if(v==='todo'&&!it.cat)it.cat='work';
   renderQuickPreview();
@@ -1883,7 +1923,7 @@ function qiReadDom(i){
   }else if(it.type==='todo'){
     it.title=v('qf_title_'+i);it.due=v('qf_due_'+i);it.cat=v('qf_cat_'+i);it.pri=v('qf_pri_'+i);
   }else{
-    it.name=v('qf_name_'+i);it.sub=v('qf_sub_'+i);
+    it.name=v('qf_name_'+i);it.sub=v('qf_sub_'+i);it.track=v('qf_track_'+i);
     it.amount=parseFloat(v('qf_amount_'+i))||0;it.date=v('qf_date_'+i);
     if(it.sub==='auto'){it.rNum=parseInt(v('qf_num_'+i))||1;it.rUnit=v('qf_unit_'+i);}
   }
@@ -1908,9 +1948,9 @@ function quickImport(){
       var dt=it.date||'';
       if(sub==='auto'){
         var ru=it.rUnit||'month', rn=parseInt(it.rNum)||1;
-        members.push({id:uid(),name:nm,cat:'其他',note:'',type:'auto',amount:amt,rUnit:ru,rNum:rn,nextRenew:dt,auto:'on'});
+        members.push({id:uid(),name:nm,cat:'其他',track:(it.track==='work'?'work':'life'),note:'',type:'auto',amount:amt,rUnit:ru,rNum:rn,nextRenew:dt,auto:'on'});
       }else{
-        members.push({id:uid(),name:nm,cat:'其他',note:'',type:'recharge',chargeAmount:amt,chargeDate:dt,expireDate:'',records:[]});
+        members.push({id:uid(),name:nm,cat:'其他',track:(it.track==='work'?'work':'life'),note:'',type:'recharge',chargeAmount:amt,chargeDate:dt,expireDate:'',records:[]});
       }
       added.mem++;
     }
@@ -1934,6 +1974,7 @@ document.getElementById('quickMask').addEventListener('click',function(e){if(e.t
 document.getElementById('topDate').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
 document.getElementById('schDate').value=TODAY;
 document.getElementById('todoDue').value='';
+migrateMembers();
 renderAll();
 renderWeather();
 document.getElementById('btnSyncNow').onclick=function(){

@@ -201,6 +201,17 @@
 .mem-add-consume{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .mem-add-consume input{font-size:14px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;min-height:38px;}
 .mem-add-consume input[type=number]{max-width:110px;}
+/* 消费记录折叠 + 行内编辑 */
+.mem-recs-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#5b6b82;font-weight:600;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);user-select:none;-webkit-tap-highlight-color:transparent;}
+.mem-recs-toggle .caret{margin-left:auto;transition:transform .2s;}
+.mem-recs-toggle.open .caret{transform:rotate(180deg);}
+.mem-recs-body.collapsed{display:none;}
+.mem-rec.editing{flex-wrap:wrap;gap:6px;align-items:flex-end;}
+.mem-rec .mini-inp{font-size:13px;padding:5px 6px;border:1px solid var(--line);border-radius:7px;background:#fff;min-height:34px;color:inherit;}
+.mem-rec .mini-inp.amt{max-width:92px;}
+.mem-rec .mini-inp.note{flex:1;min-width:90px;}
+.mem-rec .btn.save{min-width:auto;padding:6px 14px;}
+.mem-rec .btn.cancel{min-width:auto;padding:6px 14px;background:#eef1f6;color:#5b6b82;}
 .hidden{display:none !important;}
 </style>
 </head>
@@ -938,6 +949,8 @@ function renderNotes(){
 }
 
 /* ============ 渲染：会员卡 / 自动续费 ============ */
+var memRecsOpen=new Set();   // 已展开消费记录的充值卡 id
+var editingConsume=null;     // 正在编辑的消费记录 {memId,recId}
 function memBalance(m){
   var charge=parseFloat(m.chargeAmount)||0;
   var spent=(m.records||[]).reduce(function(s,r){return s+(parseFloat(r.amount)||0);},0);
@@ -963,11 +976,23 @@ function renderMembers(){
         (m.note?'<span>'+esc(m.note)+'</span>':'')+'</div>';
       var recs=(m.records||[]);
       if(recs.length){
-        html+='<div class="mem-r-block">';
+        var open=memRecsOpen.has(m.id);
+        html+='<div class="mem-recs-toggle'+(open?' open':'')+'" onclick="toggleMemRecs(\''+m.id+'\')">消费记录 '+recs.length+' 笔 <span class="caret">▾</span></div>'+
+          '<div class="mem-recs-body'+(open?'':' collapsed')+'">';
         recs.slice().reverse().forEach(function(r){
-          html+='<div class="mem-rec"><span>'+esc(r.date||'-')+'</span><span>'+esc(r.note||'消费')+'</span>'+
-            '<span class="amt">-¥'+esc(r.amount)+'</span>'+
-            '<button class="del" onclick="delConsume(\''+m.id+'\',\''+r.id+'\')">删</button></div>';
+          if(editingConsume&&editingConsume.memId===m.id&&editingConsume.recId===r.id){
+            html+='<div class="mem-rec editing">'+
+              '<input type="date" class="mini-inp" id="ed_cd_'+r.id+'" value="'+esc(r.date||'')+'">'+
+              '<input type="number" class="mini-inp amt" id="ed_ca_'+r.id+'" value="'+esc(r.amount)+'" min="0" step="0.01">'+
+              '<input class="mini-inp note" id="ed_cn_'+r.id+'" value="'+esc(r.note||'')+'" placeholder="备注">'+
+              '<button class="btn save" onclick="saveConsume(\''+m.id+'\',\''+r.id+'\')">存</button>'+
+              '<button class="btn cancel" onclick="cancelEditConsume()">撤</button></div>';
+          }else{
+            html+='<div class="mem-rec"><span>'+esc(r.date||'-')+'</span><span>'+esc(r.note||'消费')+'</span>'+
+              '<span class="amt">-¥'+esc(r.amount)+'</span>'+
+              '<button class="del" onclick="editConsume(\''+m.id+'\',\''+r.id+'\')">改</button>'+
+              '<button class="del" onclick="delConsume(\''+m.id+'\',\''+r.id+'\')">删</button></div>';
+          }
         });
         html+='</div>';
       }
@@ -1002,6 +1027,30 @@ function addConsume(id){
 function delConsume(id,recId){
   var m=members.find(function(x){return x.id===id;});if(!m||!m.records)return;
   m.records=m.records.filter(function(r){return r.id!==recId;});
+  save('members',members);renderMembers();
+}
+function toggleMemRecs(id){
+  if(memRecsOpen.has(id))memRecsOpen.delete(id);else memRecsOpen.add(id);
+  renderMembers();
+}
+function editConsume(id,recId){
+  editingConsume={memId:id,recId:recId};
+  if(!memRecsOpen.has(id))memRecsOpen.add(id);
+  renderMembers();
+}
+function cancelEditConsume(){
+  editingConsume=null;
+  renderMembers();
+}
+function saveConsume(id,recId){
+  var m=members.find(function(x){return x.id===id;});if(!m||!m.records)return;
+  var r=m.records.find(function(x){return x.id===recId;});if(!r)return;
+  var date=(document.getElementById('ed_cd_'+recId).value||'').trim();
+  var amt=parseFloat(document.getElementById('ed_ca_'+recId).value)||0;
+  var note=(document.getElementById('ed_cn_'+recId).value||'').trim();
+  if(!amt){alert('请填写消费金额');return;}
+  r.date=date;r.amount=amt;r.note=note;
+  editingConsume=null;
   save('members',members);renderMembers();
 }
 function toggleCard(h){var c=h.closest('.card');if(c)c.classList.toggle('collapsed');}

@@ -213,6 +213,16 @@
 .mem-rec .btn.save{min-width:auto;padding:6px 14px;}
 .mem-rec .btn.cancel{min-width:auto;padding:6px 14px;background:#eef1f6;color:#5b6b82;}
 .hidden{display:none !important;}
+/* ============ 快速创建（智能粘贴分类） ============ */
+.quick-preview{max-height:46vh;overflow-y:auto;margin:4px 0 2px;}
+.qi{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:#fbfcfe;}
+.qi-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.qi-top>select{font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;}
+.qi-top .qi-del{margin-left:auto;}
+.qi-fields{display:flex;flex-wrap:wrap;gap:8px;}
+.qi-fields input,.qi-fields select{font-size:14px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;min-height:38px;}
+.qi-fields .grow{flex:1;min-width:140px;}
+.qi-empty{color:var(--muted);font-size:13px;padding:8px 2px;}
 </style>
 </head>
 <body>
@@ -228,6 +238,7 @@
       <div class="top-actions">
         <button class="btn ghost mini" id="btnExport">导出 JSON</button>
         <button class="btn ghost mini" id="btnImport">导入恢复</button>
+        <button class="btn ghost mini" id="btnQuick">快速创建</button>
         <button class="btn ghost mini" id="btnSettings">设置</button>
         <button class="btn danger mini" id="btnClear">清空数据</button>
       </div>
@@ -446,6 +457,24 @@
     <div class="foot">
       <button class="btn ghost" id="setCancel">关闭</button>
       <button class="btn" id="setSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 快速创建弹层 -->
+<div class="modal-mask" id="quickMask">
+  <div class="modal">
+    <h3>⚡ 快速创建</h3>
+    <p style="font-size:13px;color:var(--ink);margin:0 0 6px;">把日程 / 待办 / 会员卡信息混着粘贴进来，每行一条，系统自动分类（有误可改），确认后写入。</p>
+    <textarea id="quickInput" rows="6" placeholder="例如：&#10;8月20日 去机场接人&#10;Keep 月付续费 25元&#10;狗洗澡卡充值 3000&#10;记得交下季度房租"></textarea>
+    <div style="margin:10px 0 4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="btn mini" id="quickParse">解析</button>
+      <span style="font-size:12px;color:var(--muted);">支持：今天/明天/周X/8月20日/2026-08-20、¥25、月付/年付、充值/续费/卡 等关键词</span>
+    </div>
+    <div id="quickPreview" class="quick-preview"></div>
+    <div class="foot">
+      <button class="btn ghost" id="quickCancel">关闭</button>
+      <button class="btn" id="quickImport">确认导入</button>
     </div>
   </div>
 </div>
@@ -1580,6 +1609,196 @@ function renderAll(){
   if(total>=30){b.style.display='block';b.textContent='💡 数据已积累 '+total+' 条，建议点右上角「导出 JSON」备份一下，防止意外丢失。';}
   else b.style.display='none';
 }
+
+/* ============ 快速创建（智能粘贴分类） ============ */
+var parsedItems=[];
+function parseNatDate(s){
+  if(!s)return '';
+  var m;
+  if((m=s.match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/))){
+    var y=+m[1],mo=+m[2],d=+m[3];
+    if(mo>=1&&mo<=12&&d>=1&&d<=31) return fmt(new Date(y,mo-1,d));
+  }
+  if((m=s.match(/(\d{1,2})月(\d{1,2})[日号]?/))){
+    var mo2=+m[1],d2=+m[2];
+    if(mo2>=1&&mo2<=12&&d2>=1&&d2<=31) return fmt(new Date(new Date().getFullYear(),mo2-1,d2));
+  }
+  if((m=s.match(/(\d{1,2})[./](\d{1,2})/))){
+    var mo3=+m[1],d3=+m[2];
+    if(mo3>=1&&mo3<=12&&d3>=1&&d3<=31) return fmt(new Date(new Date().getFullYear(),mo3-1,d3));
+  }
+  if(/大后天/.test(s)) return addDays(TODAY,3);
+  if(/后天/.test(s)) return addDays(TODAY,2);
+  if(/明天/.test(s)) return addDays(TODAY,1);
+  if(/今天/.test(s)) return TODAY;
+  if(/昨天|前天/.test(s)) return addDays(TODAY,-1);
+  var wk={'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':0,'天':0};
+  var wm=s.match(/下?周[一二三四五六日天]/);
+  if(wm){
+    var tg=wk[wm[0].slice(-1)],cur=new Date().getDay();
+    var diff=(tg-cur+7)%7;
+    if(/下/.test(wm[0])) diff+=7;
+    if(diff===0) diff=1;
+    return addDays(TODAY,diff);
+  }
+  return '';
+}
+function parseTime(s){
+  if(!s)return '';
+  var m=s.match(/(\d{1,2})[:：](\d{2})/);
+  if(m) return ('0'+m[1]).slice(-2)+':'+m[2];
+  m=s.match(/(\d{1,2})\s*点(?:半|(\d{1,2})\s*分?)?/);
+  if(m){
+    var h=+m[1],min=m[2]?('0'+m[2]).slice(-2):'00';
+    if(/下午|傍晚|晚上|夜里/.test(s)&&h<12)h+=12;
+    if(/凌晨|午夜/.test(s)&&h===12)h=0;
+    return ('0'+h).slice(-2)+':'+min;
+  }
+  return '';
+}
+function parseAmount(s){
+  if(!s)return 0;
+  var m=s.match(/(\d+(?:\.\d+)?)\s*(?:元|块|￥|¥)/);
+  if(m) return parseFloat(m[1]);
+  m=s.match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)/);
+  if(m) return parseFloat(m[1]);
+  return 0;
+}
+function classifyLine(line){
+  var date=parseNatDate(line), time=parseTime(line);
+  var title=line.replace(/[¥￥]\s*\d+(?:\.\d+)?/g,'')
+    .replace(/\d+(?:\.\d+)?\s*(?:元|块)/g,'')
+    .replace(/\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}/g,'')
+    .replace(/\d{1,2}月\d{1,2}[日号]?/g,'')
+    .replace(/\d{1,2}[./]\d{1,2}/g,'')
+    .replace(/(大后天|后天|明天|今天|昨天|前天)/g,'')
+    .replace(/下周?[一二三四五六日天]/g,'')
+    .replace(/(上午|早上|早晨|下午|傍晚|晚上|夜里|凌晨|午夜|中午)?\s*\d{1,2}\s*点(?:半|\d{1,2}\s*分?)?/g,'')
+    .replace(/\d{1,2}[:：]\d{2}/g,'')
+    .replace(/\s+/g,' ').trim();
+  var cycKw=/月付|月费|每月|包月|季付|每季度|包季|年付|每年|包年|自动/;
+  var memKw=/充值|会员|续费|订阅|卡/;
+  var todoKw=/记得|提醒|待办|交|预约|报名|买|购|办|申请|提交|回复|寄|取|领|缴|续租/;
+  var isMem=memKw.test(line)||(cycKw.test(line)&&(parseAmount(line)>0||/付|费|订阅/.test(line)));
+  if(isMem){
+    var sub=cycKw.test(line)?'auto':'recharge';
+    var cycle='month';
+    if(/季付|每季度|包季/.test(line))cycle='quarter';
+    else if(/年付|每年|包年/.test(line))cycle='year';
+    var amt=parseAmount(line);
+    if(!amt){var mm=line.match(/(\d+(?:\.\d+)?)/);if(mm)amt=parseFloat(mm[1]);}
+    var name=title.replace(/充值|续费|会员|订阅|卡|月付|月费|季付|年付|每月|每年|每季度|包月|包季|包年|自动|套餐|费/g,'').replace(/\s+/g,'').trim();
+    if(amt)name=name.replace(new RegExp('\\s*'+amt+'\\s*'),'').replace(/\s+/g,'').trim();
+    if(!name)name='未命名会员';
+    return {type:'mem',sub:sub,cycle:cycle,amount:amt,date:date,name:name,note:''};
+  }
+  if(todoKw.test(line)){
+    var cat=/生活|个人|家里|家人|买|购物|健身|宠物|狗|猫|旅行|旅游|体检|就医|玩/.test(line)?'life':'work';
+    return {type:'todo',title:title||line,due:date,cat:cat,pri:'P1'};
+  }
+  if(date){
+    var st=/生活|个人|家里|家人|健身|宠物|狗|猫|旅行|旅游|体检|就医|玩|聚会|朋友/.test(line)?'life':'work';
+    return {type:'sch',title:title||line,date:date,time:time,schType:st};
+  }
+  return {type:'todo',title:title||line,due:'',cat:'work',pri:'P1'};
+}
+function renderQuickPreview(){
+  var box=document.getElementById('quickPreview');
+  if(!parsedItems.length){box.innerHTML='<div class="qi-empty">粘贴后点「解析」，这里会按 日程 / 待办 / 会员卡 分组显示，可逐项修改或移除。</div>';return;}
+  var html='';
+  parsedItems.forEach(function(it,idx){
+    html+='<div class="qi">'+
+      '<div class="qi-top">'+
+        '<input type="checkbox" '+(it.include!==false?'checked':'')+' onchange="qiToggle('+idx+',this.checked)">'+
+        '<select onchange="qiReclass('+idx+',this.value)">'+
+          '<option value="sch"'+(it.type==='sch'?' selected':'')+'>日程</option>'+
+          '<option value="todo"'+(it.type==='todo'?' selected':'')+'>待办</option>'+
+          '<option value="mem"'+(it.type==='mem'?' selected':'')+'>会员卡</option>'+
+        '</select>';
+    if(it.type==='sch')html+='<span class="ts">'+(it.date||'无日期')+(it.time?(' '+it.time):'')+'</span>';
+    else if(it.type==='todo')html+='<span class="ts">'+(it.due?('截止 '+it.due):'无截止')+'</span>';
+    else html+='<span class="ts">'+(it.sub==='auto'?'自动续费':'充值卡')+(it.amount?(' ¥'+it.amount):'')+'</span>';
+    html+='<button class="del qi-del" onclick="qiRemove('+idx+')">移除</button></div><div class="qi-fields">';
+    if(it.type==='sch'){
+      html+='<input class="grow" id="qf_title_'+idx+'" value="'+esc(it.title||'')+'" placeholder="标题">'+
+        '<input type="date" id="qf_date_'+idx+'" value="'+(it.date||'')+'">'+
+        '<input type="time" id="qf_time_'+idx+'" value="'+(it.time||'')+'">'+
+        '<select id="qf_schtype_'+idx+'"><option value="work"'+(it.schType!=='life'?' selected':'')+'>工作</option><option value="life"'+(it.schType==='life'?' selected':'')+'>生活</option></select>';
+    }else if(it.type==='todo'){
+      html+='<input class="grow" id="qf_title_'+idx+'" value="'+esc(it.title||'')+'" placeholder="标题">'+
+        '<input type="date" id="qf_due_'+idx+'" value="'+(it.due||'')+'">'+
+        '<select id="qf_cat_'+idx+'"><option value="work"'+(it.cat!=='life'?' selected':'')+'>工作</option><option value="life"'+(it.cat==='life'?' selected':'')+'>生活</option></select>'+
+        '<select id="qf_pri_'+idx+'"><option value="P0"'+(it.pri==='P0'?' selected':'')+'>P0</option><option value="P1"'+(it.pri==='P1'?' selected':'')+'>P1</option><option value="P2"'+(it.pri==='P2'?' selected':'')+'>P2</option></select>';
+    }else{
+      html+='<input class="grow" id="qf_name_'+idx+'" value="'+esc(it.name||'')+'" placeholder="名称">'+
+        '<select id="qf_sub_'+idx+'" onchange="qiSubChange('+idx+',this.value)"><option value="auto"'+(it.sub==='auto'?' selected':'')+'>自动续费卡</option><option value="recharge"'+(it.sub==='recharge'?' selected':'')+'>充值卡</option></select>'+
+        '<input type="number" id="qf_amount_'+idx+'" value="'+esc(it.amount||'')+'" placeholder="金额" min="0" step="0.01">'+
+        (it.sub==='auto'
+          ? '<select id="qf_cycle_'+idx+'"><option value="month"'+(it.cycle!=='quarter'&&it.cycle!=='year'?' selected':'')+'>月付</option><option value="quarter"'+(it.cycle==='quarter'?' selected':'')+'>季付</option><option value="year"'+(it.cycle==='year'?' selected':'')+'>年付</option></select><input type="date" id="qf_date_'+idx+'" value="'+(it.date||'')+'" placeholder="开通时间">'
+          : '<input type="date" id="qf_date_'+idx+'" value="'+(it.date||'')+'" placeholder="充值时间">');
+    }
+    html+='</div></div>';
+  });
+  box.innerHTML=html;
+}
+function qiToggle(i,v){if(parsedItems[i])parsedItems[i].include=v;}
+function qiRemove(i){parsedItems.splice(i,1);renderQuickPreview();}
+function qiReclass(i,v){
+  var it=parsedItems[i];if(!it)return;
+  it.type=v;
+  if(v==='mem'&&!it.name){it.name=it.title||'';it.sub=it.sub||'recharge';it.cycle=it.cycle||'month';if(!it.amount)it.amount=0;}
+  if(v==='sch'&&!it.schType)it.schType='work';
+  if(v==='todo'&&!it.cat)it.cat='work';
+  renderQuickPreview();
+}
+function qiSubChange(i,v){if(parsedItems[i])parsedItems[i].sub=v;renderQuickPreview();}
+function quickParse(){
+  var text=document.getElementById('quickInput').value||'';
+  var lines=text.split(/\r?\n/).map(function(s){return s.trim();}).filter(function(s){return s;});
+  parsedItems=[];
+  lines.forEach(function(line){var it=classifyLine(line);it.include=true;parsedItems.push(it);});
+  renderQuickPreview();
+}
+function quickImport(){
+  var added={sch:0,todo:0,mem:0};
+  parsedItems.forEach(function(it,idx){
+    if(it.include===false)return;
+    if(it.type==='sch'){
+      var t=document.getElementById('qf_title_'+idx).value.trim();if(!t)return;
+      schedules.push({id:uid(),title:t,date:document.getElementById('qf_date_'+idx).value||TODAY,time:document.getElementById('qf_time_'+idx).value||'',type:document.getElementById('qf_schtype_'+idx).value,note:'',repeat:'none',done:false,doneDates:[]});
+      added.sch++;
+    }else if(it.type==='todo'){
+      var t2=document.getElementById('qf_title_'+idx).value.trim();if(!t2)return;
+      todos.push({id:uid(),title:t2,cat:document.getElementById('qf_cat_'+idx).value,pri:document.getElementById('qf_pri_'+idx).value,due:document.getElementById('qf_due_'+idx).value||'',done:false,created:TODAY});
+      added.todo++;
+    }else{
+      var nm=document.getElementById('qf_name_'+idx).value.trim();if(!nm)return;
+      var sub=document.getElementById('qf_sub_'+idx).value;
+      var amt=parseFloat(document.getElementById('qf_amount_'+idx).value)||0;
+      var dt=document.getElementById('qf_date_'+idx).value||'';
+      if(sub==='auto'){
+        var cyc=document.getElementById('qf_cycle_'+idx).value;
+        members.push({id:uid(),name:nm,cat:'其他',note:'',type:'auto',amount:amt,cycle:cyc,nextRenew:dt,auto:'on'});
+      }else{
+        members.push({id:uid(),name:nm,cat:'其他',note:'',type:'recharge',chargeAmount:amt,chargeDate:dt,expireDate:'',records:[]});
+      }
+      added.mem++;
+    }
+  });
+  if(added.sch)save('schedules',schedules);
+  if(added.todo)save('todos',todos);
+  if(added.mem)save('members',members);
+  renderAll();
+  closeQuick();
+  alert('已导入：日程 '+added.sch+' 条，待办 '+added.todo+' 条，会员卡 '+added.mem+' 张');
+}
+function openQuick(){document.getElementById('quickMask').classList.add('show');parsedItems=[];renderQuickPreview();}
+function closeQuick(){document.getElementById('quickMask').classList.remove('show');}
+document.getElementById('btnQuick').onclick=openQuick;
+document.getElementById('quickCancel').onclick=closeQuick;
+document.getElementById('quickParse').onclick=quickParse;
+document.getElementById('quickImport').onclick=quickImport;
+document.getElementById('quickMask').addEventListener('click',function(e){if(e.target===this)closeQuick();});
 
 /* ============ 初始化 ============ */
 document.getElementById('topDate').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});

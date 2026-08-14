@@ -1136,9 +1136,10 @@ document.getElementById('btnPasteImport').onclick=function(){
     if(d.settings)settings=d.settings;
     if(typeof settings.destCity!=='string')settings.destCity='';
     save('schedules',schedules);save('todos',todos);save('notes',notes);save('members',members);save('settings',settings);
+    if(syncCfg.enabled&&syncCfg.token&&syncCfg.pass){pushSync();} // 恢复后主动上传真实数据，避免依赖后续操作顺序
     renderAll();renderWeather();
     document.getElementById('settingsMask').classList.remove('show');
-    alert('恢复成功：'+schedules.length+' 日程 / '+todos.length+' 待办 / '+notes.length+' 备忘 / '+members.length+' 会员卡');
+    alert('恢复成功：'+schedules.length+' 日程 / '+todos.length+' 待办 / '+notes.length+' 备忘 / '+members.length+' 会员卡'+(syncCfg.enabled?'（已触发同步上传）':''));
   }catch(err){alert('恢复失败：'+(err&&err.message?err.message:'内容不是合法 JSON，请检查是否完整复制'));}
 };
 document.getElementById('btnClear').onclick=function(){

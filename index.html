@@ -164,6 +164,37 @@
 .sync-sec input[type=text],.sync-sec input:not([type]){width:100%;padding:9px 10px;border:1px solid #d7dbe0;border-radius:9px;font-size:14px;box-sizing:border-box;}
 .sync-sec input[type=password]{width:100%;padding:9px 10px;border:1px solid #d7dbe0;border-radius:9px;font-size:14px;box-sizing:border-box;}
 .sync-sec .hint{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5;}
+
+/* ============ 卡片折叠（综合页） ============ */
+.card h3{cursor:pointer;user-select:none;}
+.card h3 .caret{transition:transform .2s ease;font-size:13px;color:var(--muted);margin-left:6px;display:inline-block;}
+.card.collapsed .caret{transform:rotate(-90deg);}
+.card.collapsed > *:not(h3){display:none;}
+@media(max-width:768px){
+  .card.collapsed h3{margin-bottom:0;}
+}
+
+/* ============ 待办已完成折叠 ============ */
+.done-fold{margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;
+  font-size:14px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer;background:#fbfcfe;}
+.done-fold .caret{transition:transform .2s ease;display:inline-block;}
+.done-fold.open .caret{transform:rotate(180deg);}
+.li.done .li-title{text-decoration:line-through;color:var(--muted);}
+
+/* ============ 充值卡（预付费） ============ */
+.mem-type-tag{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap;}
+.mem-type-tag.recharge{background:#e7f0ff;color:#2b6cb0;}
+.mem-type-tag.auto{background:var(--future-soft);color:var(--future);}
+.mem-balance{font-size:22px;font-weight:800;color:var(--work);}
+.mem-balance small{font-size:12px;font-weight:500;color:var(--muted);}
+.mem-r-block{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+.mem-rec{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:5px 0;border-bottom:1px dotted #eef0f3;}
+.mem-rec .amt{color:var(--danger);font-weight:700;margin-left:auto;}
+.mem-rec .del{font-size:12px;padding:3px 8px;min-height:30px;}
+.mem-add-consume{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.mem-add-consume input{font-size:14px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;min-height:38px;}
+.mem-add-consume input[type=number]{max-width:110px;}
+.hidden{display:none !important;}
 </style>
 </head>
 <body>
@@ -203,7 +234,7 @@
 
     <!-- 模块1：今日日程 -->
     <section class="card">
-      <h3>🗓️ 今日日程 <span class="count" id="schCount"></span></h3>
+      <h3 onclick="toggleCard(this)">🗓️ 今日日程 <span class="count" id="schCount"></span><span class="caret">▾</span></h3>
       <div class="form">
         <input class="grow" id="schTitle" placeholder="日程内容（如：项目例会）">
         <input type="date" id="schDate">
@@ -236,8 +267,8 @@
     </section>
 
     <!-- 模块2：待办清单 -->
-    <section class="card">
-      <h3>✅ 待办清单 <span class="count" id="todoCount"></span></h3>
+    <section class="card collapsed">
+      <h3 onclick="toggleCard(this)">✅ 待办清单 <span class="count" id="todoCount"></span><span class="caret">▾</span></h3>
       <div class="form">
         <input class="grow" id="todoTitle" placeholder="待办事项">
         <select id="todoCat">
@@ -267,8 +298,8 @@
     </section>
 
     <!-- 模块3：随手备忘 -->
-    <section class="card">
-      <h3>📝 随手备忘 <span class="count" id="noteCount"></span></h3>
+    <section class="card collapsed">
+      <h3 onclick="toggleCard(this)">📝 随手备忘 <span class="count" id="noteCount"></span><span class="caret">▾</span></h3>
       <div class="form">
         <textarea id="noteContent" rows="2" placeholder="灵感、琐事、临时记事……"></textarea>
       </div>
@@ -281,19 +312,20 @@
     </section>
 
     <!-- 模块5：会员卡 / 自动续费 -->
-    <section class="card">
-      <h3>💳 会员卡 / 自动续费 <span class="count" id="memCount"></span></h3>
+    <section class="card collapsed">
+      <h3 onclick="toggleCard(this)">💳 会员卡 / 自动续费 <span class="count" id="memCount"></span><span class="caret">▾</span></h3>
       <div class="form">
-        <input class="grow" id="memName" placeholder="会员名称（如：爱奇艺黄金VIP）">
-        <input type="number" id="memAmount" placeholder="金额¥" min="0" step="0.01" style="max-width:110px;">
-        <select id="memCycle">
-          <option value="month">月付</option>
-          <option value="quarter">季付</option>
-          <option value="year">年付</option>
+        <select id="memType">
+          <option value="auto">自动续费卡</option>
+          <option value="recharge">充值卡（预付费·不自动续）</option>
         </select>
+      </div>
+      <div class="form">
+        <input class="grow" id="memName" placeholder="名称（如：爱奇艺VIP / 狗洗澡卡）">
         <select id="memCat">
           <option value="影音">影音</option>
           <option value="健身">健身</option>
+          <option value="宠物">宠物</option>
           <option value="读书">读书</option>
           <option value="工具">工具</option>
           <option value="其他">其他</option>
@@ -301,20 +333,35 @@
         <button class="btn" id="memAdd">添加</button>
         <button class="btn ghost" id="memCancel" style="display:none">取消</button>
       </div>
-      <div class="form">
+      <!-- 自动续费卡字段 -->
+      <div class="form" id="memAutoFields">
+        <input type="number" id="memAmount" placeholder="金额¥" min="0" step="0.01" style="max-width:110px;">
+        <select id="memCycle">
+          <option value="month">月付</option>
+          <option value="quarter">季付</option>
+          <option value="year">年付</option>
+        </select>
         <input type="date" id="memNext" class="grow" placeholder="下次续费日">
         <select id="memAuto">
           <option value="on">自动续费：开</option>
           <option value="off">自动续费：关</option>
         </select>
+      </div>
+      <!-- 充值卡（预付费）字段 -->
+      <div class="form hidden" id="memRechargeFields">
+        <input type="number" id="memCharge" placeholder="充值总额¥" min="0" step="0.01" style="max-width:120px;">
+        <input type="date" id="memChargeDate" class="grow" placeholder="充值时间">
+        <input type="date" id="memExpire" class="grow" placeholder="使用期限（到期日）">
+      </div>
+      <div class="form">
         <input class="grow" id="memNote" placeholder="备注（选填，如：绑定的卡/账号）">
       </div>
       <div class="list" id="memList"></div>
     </section>
 
     <!-- 模块4：今日日历 & 天气 -->
-    <section class="card">
-      <h3>🌤️ 今日日历 & 天气</h3>
+    <section class="card collapsed">
+      <h3 onclick="toggleCard(this)">🌤️ 今日日历 & 天气<span class="caret">▾</span></h3>
       <div class="cal-head">
         <div class="mon" id="calMon"></div>
         <div class="cal-nav">
@@ -809,32 +856,39 @@ function renderSchedules(){
 
 /* ============ 渲染：待办 ============ */
 var todoFilter='all';
+var doneOpen=false;
+function toggleDone(){doneOpen=!doneOpen;renderTodos();}
 function renderTodos(){
   var box=document.getElementById('todoList');
   var all=todos.slice();
-  if(todoFilter==='active')all=all.filter(function(t){return !t.done;});
-  else if(todoFilter!=='all')all=all.filter(function(t){return t.cat===todoFilter;});
-  all.sort(function(a,b){
-    if(a.done!==b.done)return a.done?1:-1;
+  if(todoFilter!=='all')all=all.filter(function(t){return todoFilter==='active'?(!t.done):(t.cat===todoFilter);});
+  var active=all.filter(function(t){return !t.done;});
+  var done=all.filter(function(t){return t.done;});
+  active.sort(function(a,b){
     var pa={P0:0,P1:1,P2:2}[a.pri],pb={P0:0,P1:1,P2:2}[b.pri];
     if(pa!==pb)return pa-pb;
     if((a.due||'')!==(b.due||''))return (a.due||'9999').localeCompare(b.due||'9999');
     return 0;
   });
   document.getElementById('todoCount').textContent=todos.length+' 条';
-  if(all.length===0){box.innerHTML='<div class="empty">暂无待办。</div>';return;}
-  var html='';
-  all.forEach(function(t){
+  if(active.length===0&&done.length===0){box.innerHTML='<div class="empty">暂无待办。</div>';return;}
+  function itemHtml(t){
     var cat=t.cat==='work'?'work':(t.cat==='life'?'life':'future');
     var overdue=(!t.done&&t.due&&t.due<TODAY);
-    html+='<div class="li'+(t.done?' done':'')+'"><div class="chk" onclick="toggleTodo(\''+t.id+'\')">'+(t.done?'✓':'')+'</div>'+
+    return '<div class="li'+(t.done?' done':'')+'"><div class="chk" onclick="toggleTodo(\''+t.id+'\')">'+(t.done?'✓':'')+'</div>'+
       '<div class="li-body"><div class="li-title">'+esc(t.title)+'</div>'+
       '<div class="li-meta"><span class="pill '+cat+'">'+(t.cat==='work'?'工作':(t.cat==='life'?'生活':'未来'))+'</span>'+
       '<span class="pill '+(t.pri==='P0'?'due':(t.pri==='P1'?'soon':''))+'">'+esc(t.pri)+'</span>'+
       (t.due?'<span'+(overdue?' style="color:var(--danger);font-weight:600"':'')+'>截止 '+esc(t.due)+(overdue?'（逾期）':'')+'</span>':'')+'</div></div>'+
       '<button class="del" onclick="editTodo(\''+t.id+'\')">编辑</button>'+
       '<button class="del" onclick="delTodo(\''+t.id+'\')">删除</button></div>';
-  });
+  }
+  var html='';
+  active.forEach(function(t){html+=itemHtml(t);});
+  if(done.length>0){
+    html+='<div class="done-fold'+(doneOpen?' open':'')+'" onclick="toggleDone()">已完成 '+done.length+' 项 <span class="caret">▾</span></div>';
+    if(doneOpen){done.forEach(function(t){html+=itemHtml(t);});}
+  }
   box.innerHTML=html;
 }
 
@@ -856,30 +910,73 @@ function renderNotes(){
 }
 
 /* ============ 渲染：会员卡 / 自动续费 ============ */
+function memBalance(m){
+  var charge=parseFloat(m.chargeAmount)||0;
+  var spent=(m.records||[]).reduce(function(s,r){return s+(parseFloat(r.amount)||0);},0);
+  return Math.round((charge-spent)*100)/100;
+}
 function renderMembers(){
   var box=document.getElementById('memList');
-  var all=members.slice().sort(function(a,b){return (a.nextRenew||'9999').localeCompare(b.nextRenew||'9999');});
+  var all=members.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
   document.getElementById('memCount').textContent=all.length+' 张';
   if(all.length===0){box.innerHTML='<div class="empty">还没有会员卡，添加一张吧～</div>';return;}
   var html='';
   all.forEach(function(m){
-    var dl=daysBetween(TODAY,m.nextRenew);
-    var near=(dl<0||dl<=7);
-    var cnt=dl<0?('已逾期 '+Math.abs(dl)+' 天'):(dl===0?'今天到期':('还剩 '+dl+' 天'));
+    var isR=(m.type==='recharge');
     var catCls=m.cat==='影音'?'life':(m.cat==='健身'?'work':'future');
-    html+='<div class="li'+(near?' done':'')+'" style="'+(near?'opacity:1;border-color:#f3b9bb;background:var(--danger-soft);':'')+'">'+
-      '<div class="li-body"><div class="li-title">'+esc(m.name)+'</div>'+
-      '<div class="li-meta">'+
-      '<span class="pill '+catCls+'">'+esc(m.cat)+'</span>'+
-      '<span class="mem-amount">¥'+esc(m.amount)+' '+cycleLabel(m.cycle)+'</span>'+
-      '<span>下次续费 '+esc(m.nextRenew)+'（'+cnt+'）</span>'+
-      '<span class="mem-auto">'+(m.auto==='on'?'<span class="on">🔁 自动续费</span>':'<span class="off">手动续费</span>')+'</span>'+
-      (m.note?'<span>'+esc(m.note)+'</span>':'')+'</div></div>'+
-      '<button class="del" onclick="editMem(\''+m.id+'\')">编辑</button>'+
+    html+='<div class="li"><div class="li-body"><div class="li-title">'+esc(m.name)+
+      ' <span class="mem-type-tag '+(isR?'recharge':'auto')+'">'+(isR?'充值卡':'自动续费卡')+'</span></div>'+
+      '<div class="li-meta"><span class="pill '+catCls+'">'+esc(m.cat||'其他')+'</span>';
+    if(isR){
+      var bal=memBalance(m);
+      html+='<span class="mem-balance">余额 ¥'+esc(bal)+'</span>'+
+        '<span>充值 '+esc(m.chargeDate||'-')+'</span>'+
+        '<span>限用至 '+esc(m.expireDate||'-')+'</span>'+
+        (m.note?'<span>'+esc(m.note)+'</span>':'')+'</div>';
+      var recs=(m.records||[]);
+      if(recs.length){
+        html+='<div class="mem-r-block">';
+        recs.slice().reverse().forEach(function(r){
+          html+='<div class="mem-rec"><span>'+esc(r.date||'-')+'</span><span>'+esc(r.note||'消费')+'</span>'+
+            '<span class="amt">-¥'+esc(r.amount)+'</span>'+
+            '<button class="del" onclick="delConsume(\''+m.id+'\',\''+r.id+'\')">删</button></div>';
+        });
+        html+='</div>';
+      }
+      html+='<div class="mem-add-consume">'+
+        '<input type="date" id="cd_'+m.id+'" placeholder="消费日期">'+
+        '<input type="number" id="ca_'+m.id+'" placeholder="金额" min="0" step="0.01">'+
+        '<input class="grow" id="cn_'+m.id+'" placeholder="备注（选填）">'+
+        '<button class="btn mini" onclick="addConsume(\''+m.id+'\')">记一笔消费</button></div>';
+    }else{
+      var dl=daysBetween(TODAY,m.nextRenew);
+      var cnt=dl<0?('已逾期 '+Math.abs(dl)+' 天'):(dl===0?'今天到期':('还剩 '+dl+' 天'));
+      html+='<span class="mem-amount">¥'+esc(m.amount)+' '+cycleLabel(m.cycle)+'</span>'+
+        '<span>下次续费 '+esc(m.nextRenew||'-')+'（'+cnt+'）</span>'+
+        '<span class="mem-auto">'+(m.auto==='on'?'<span class="on">🔁 自动续费</span>':'<span class="off">手动续费</span>')+'</span>'+
+        (m.note?'<span>'+esc(m.note)+'</span>':'')+'</div>';
+    }
+    html+='</div><button class="del" onclick="editMem(\''+m.id+'\')">编辑</button>'+
       '<button class="del" onclick="delMem(\''+m.id+'\')">删除</button></div>';
   });
   box.innerHTML=html;
 }
+function addConsume(id){
+  var m=members.find(function(x){return x.id===id;});if(!m||m.type!=='recharge')return;
+  var date=(document.getElementById('cd_'+id).value||'').trim()||TODAY;
+  var amt=parseFloat(document.getElementById('ca_'+id).value)||0;
+  var note=(document.getElementById('cn_'+id).value||'').trim();
+  if(!amt){alert('请填写消费金额');return;}
+  if(!m.records)m.records=[];
+  m.records.push({id:uid(),date:date,amount:amt,note:note});
+  save('members',members);renderMembers();
+}
+function delConsume(id,recId){
+  var m=members.find(function(x){return x.id===id;});if(!m||!m.records)return;
+  m.records=m.records.filter(function(r){return r.id!==recId;});
+  save('members',members);renderMembers();
+}
+function toggleCard(h){var c=h.closest('.card');if(c)c.classList.toggle('collapsed');}
 
 /* ============ 渲染：日历 ============ */
 var calY=new Date().getFullYear(),calM=new Date().getMonth()+1;
@@ -1048,43 +1145,92 @@ document.getElementById('noteCancel').onclick=resetNoteForm;
 
 /* ============ 会员卡 交互 ============ */
 var memEditing=null;
+function syncMemTypeFields(){
+  var t=document.getElementById('memType').value;
+  document.getElementById('memAutoFields').classList.toggle('hidden',t!=='auto');
+  document.getElementById('memRechargeFields').classList.toggle('hidden',t!=='recharge');
+}
 function resetMemForm(){
+  document.getElementById('memType').value='auto';
   document.getElementById('memName').value='';
   document.getElementById('memAmount').value='';
   document.getElementById('memCycle').value='month';
   document.getElementById('memCat').value='影音';
   document.getElementById('memNext').value='';
   document.getElementById('memAuto').value='on';
+  document.getElementById('memCharge').value='';
+  document.getElementById('memChargeDate').value='';
+  document.getElementById('memExpire').value='';
   document.getElementById('memNote').value='';
   memEditing=null;
   document.getElementById('memAdd').textContent='添加';
   document.getElementById('memCancel').style.display='none';
+  syncMemTypeFields();
 }
 function editMem(id){
   var m=members.find(function(x){return x.id===id;});if(!m)return;
   memEditing=id;
+  var typ=m.type==='recharge'?'recharge':'auto';
+  document.getElementById('memType').value=typ;
   document.getElementById('memName').value=m.name;
-  document.getElementById('memAmount').value=m.amount;
-  document.getElementById('memCycle').value=m.cycle||'month';
   document.getElementById('memCat').value=m.cat||'影音';
-  document.getElementById('memNext').value=m.nextRenew||'';
-  document.getElementById('memAuto').value=m.auto||'on';
   document.getElementById('memNote').value=m.note||'';
+  if(typ==='recharge'){
+    document.getElementById('memCharge').value=m.chargeAmount||'';
+    document.getElementById('memChargeDate').value=m.chargeDate||'';
+    document.getElementById('memExpire').value=m.expireDate||'';
+  }else{
+    document.getElementById('memAmount').value=m.amount;
+    document.getElementById('memCycle').value=m.cycle||'month';
+    document.getElementById('memNext').value=m.nextRenew||'';
+    document.getElementById('memAuto').value=m.auto||'on';
+  }
   document.getElementById('memAdd').textContent='保存修改';
   document.getElementById('memCancel').style.display='';
+  syncMemTypeFields();
   document.getElementById('memName').focus();
 }
 function delMem(id){members=members.filter(function(x){return x.id!==id;});save('members',members);renderAll();}
 function renewed(id){var m=members.find(function(x){return x.id===id;});if(m){advanceRenew(m);save('members',members);renderAll();}}
+document.getElementById('memType').onchange=syncMemTypeFields;
 document.getElementById('memAdd').onclick=function(){
   var n=document.getElementById('memName').value.trim();
   if(!n)return;
-  var amt=parseFloat(document.getElementById('memAmount').value)||0;
+  var typ=document.getElementById('memType').value;
+  var cat=document.getElementById('memCat').value;
+  var note=document.getElementById('memNote').value.trim();
   if(memEditing){
     var m=members.find(function(x){return x.id===memEditing;});
-    if(m){m.name=n;m.amount=amt;m.cycle=document.getElementById('memCycle').value;m.cat=document.getElementById('memCat').value;m.nextRenew=document.getElementById('memNext').value||'';m.auto=document.getElementById('memAuto').value;m.note=document.getElementById('memNote').value.trim();}
+    if(m){
+      m.name=n;m.cat=cat;m.note=note;m.type=typ;
+      if(typ==='recharge'){
+        m.chargeAmount=parseFloat(document.getElementById('memCharge').value)||0;
+        m.chargeDate=document.getElementById('memChargeDate').value||'';
+        m.expireDate=document.getElementById('memExpire').value||'';
+        if(!m.records)m.records=[];
+        delete m.amount;delete m.cycle;delete m.nextRenew;delete m.auto;
+      }else{
+        m.amount=parseFloat(document.getElementById('memAmount').value)||0;
+        m.cycle=document.getElementById('memCycle').value;
+        m.nextRenew=document.getElementById('memNext').value||'';
+        m.auto=document.getElementById('memAuto').value;
+        delete m.chargeAmount;delete m.chargeDate;delete m.expireDate;delete m.records;
+      }
+    }
   }else{
-    members.push({id:uid(),name:n,amount:amt,cycle:document.getElementById('memCycle').value,cat:document.getElementById('memCat').value,nextRenew:document.getElementById('memNext').value||'',auto:document.getElementById('memAuto').value,note:document.getElementById('memNote').value.trim()});
+    var base={id:uid(),name:n,cat:cat,note:note,type:typ};
+    if(typ==='recharge'){
+      base.chargeAmount=parseFloat(document.getElementById('memCharge').value)||0;
+      base.chargeDate=document.getElementById('memChargeDate').value||'';
+      base.expireDate=document.getElementById('memExpire').value||'';
+      base.records=[];
+    }else{
+      base.amount=parseFloat(document.getElementById('memAmount').value)||0;
+      base.cycle=document.getElementById('memCycle').value;
+      base.nextRenew=document.getElementById('memNext').value||'';
+      base.auto=document.getElementById('memAuto').value;
+    }
+    members.push(base);
   }
   save('members',members);resetMemForm();renderAll();
 };

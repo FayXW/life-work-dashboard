@@ -231,6 +231,7 @@
 .qi-fields .inlbl{color:#888;font-size:13px;align-self:center;}
 .qi-fields .qf-num{width:62px;flex:0 0 auto;}
 .inlbl{color:#888;font-size:13px;align-self:center;}
+.inlbl .qf-num{width:58px;flex:0 0 auto;margin:0 2px;}
 </style>
 </head>
 <body>
@@ -306,7 +307,7 @@
             <option value="work">工作</option>
             <option value="life">生活</option>
           </select>
-          <select id="schRepeat">
+          <select id="schRepeat" onchange="toggleSchRepeatCustom()">
             <option value="none">不重复</option>
             <option value="daily">每天</option>
             <option value="weekday">每工作日(周一~五)</option>
@@ -319,7 +320,9 @@
             <option value="week7">每周日</option>
             <option value="biweekly">每2周</option>
             <option value="monthly">每月(同日期)</option>
+            <option value="custom">灵活周期…</option>
           </select>
+          <span class="inlbl" id="schRepeatCustom" style="display:none;">每 <input type="number" id="schRNum" class="qf-num" min="1" max="999" value="3"> <select id="schRUnit"><option value="day">天</option><option value="week">周</option><option value="month" selected>个月</option><option value="year">年</option></select></span>
           <button class="btn" id="schAdd">添加</button>
           <button class="btn ghost" id="schCancel" style="display:none">取消</button>
         </div>
@@ -770,12 +773,36 @@ async function renderWeather(){
 }
 
 /* ============ 日程重复 & 完成状态 ============ */
-function repeatLabel(r){
+function repeatLabel(r,s){
   var m={none:'不重复',daily:'每天',weekday:'每工作日',week1:'每周一',week2:'每周二',week3:'每周三',week4:'每周四',week5:'每周五',week6:'每周六',week7:'每周日',biweekly:'每2周',monthly:'每月(同日期)'};
+  if(r==='custom'&&s) return intervalLabel(s.rUnit, s.rNum);
   return m[r]||'不重复';
+}
+/* 灵活周期：判断 ds 是否落在「从 s.date 起每 N 天/周/月/年」的命中日 */
+function isOnInterval(s,ds){
+  var base=s.date; if(!base) return false;
+  var a=new Date(base+'T00:00:00'), d=new Date(ds+'T00:00:00');
+  if(isNaN(a.getTime())) a=new Date(TODAY+'T00:00:00');
+  var diff=Math.round((d-a)/86400000);
+  if(diff<0) return false;
+  var u=s.rUnit||'month', n=s.rNum||1;
+  if(u==='day') return diff % n === 0;
+  if(u==='week') return diff % (n*7) === 0;
+  var cur=base,g=0;
+  while(g<2000){ if(cur===ds)return true; var nx=stepDate(cur,u,n); if(nx===cur)break; cur=nx; g++; }
+  return false;
+}
+/* 灵活周期：从 from 起向前找第一个命中日（含 from 当天） */
+function nextInterval(s,from){
+  var base=s.date; if(!base) return null;
+  var fromD=new Date(from+'T00:00:00');
+  var cur=base,g=0;
+  while(cur && new Date(cur+'T00:00:00') < fromD && g<2000){ cur=stepDate(cur,s.rUnit||'month',s.rNum||1); g++; }
+  return cur;
 }
 function matchRepeat(s,ds){
   if(!s.repeat||s.repeat==='none')return s.date===ds;
+  if(s.repeat==='custom')return isOnInterval(s,ds);
   var d=new Date(ds+'T00:00:00');var dow=d.getDay();
   switch(s.repeat){
     case 'daily':return true;
@@ -804,6 +831,7 @@ function fmtMD(ds){var p=ds.split('-');return (+p[1])+'/'+(+p[2]);}
 // 下次循环日：从今天起向前找第一个命中重复规则的日期
 function nextOccurrence(s){
   if(!s.repeat||s.repeat==='none')return s.date;
+  if(s.repeat==='custom')return nextInterval(s,TODAY);
   for(var i=0;i<400;i++){
     var ds=addDays(TODAY,i);
     if(matchRepeat(s,ds))return ds;
@@ -847,7 +875,7 @@ function renderToday(){
       if(isRep){
         var nx=nextOccurrence(o);
         var nxDow=nx?WK[new Date(nx+'T00:00:00').getDay()]:'';
-        repTxt=' · 🔁'+repeatLabel(o.repeat)+' · '+(nx?(nx===TODAY?('今天 '+fmtMD(nx)+' '+nxDow):('下次 '+fmtMD(nx)+' '+nxDow)):'(近期无)');
+        repTxt=' · 🔁'+repeatLabel(o.repeat,o)+' · '+(nx?(nx===TODAY?('今天 '+fmtMD(nx)+' '+nxDow):('下次 '+fmtMD(nx)+' '+nxDow)):'(近期无)');
       }
       html+='<div class="titem'+(done?' done':'')+'"><div class="ic" style="background:var(--'+cat+'-soft)">🗓️</div>'+
         '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
@@ -890,13 +918,15 @@ function stepDate(ds,unit,num){
   if(unit==='year')return addMonths(ds,num*12);
   return addMonths(ds,num);
 }
-/* 续费周期标签：1 → 月付/年付；>1 → 每N天/周/个月/年 */
-function renewLabel(m){
-  var u=m.rUnit||'month', n=m.rNum||1;
+/* 周期标签：1 → 月付/年付/周付/日付；>1 → 每N天/周/个月/年（会员卡与日程共用） */
+function intervalLabel(u,n){
+  u=u||'month';n=n||1;
   if(n===1)return u==='day'?'日付':(u==='week'?'周付':(u==='year'?'年付':'月付'));
   var un={day:'天',week:'周',month:'个月',year:'年'}[u]||'个月';
   return '每'+n+un;
 }
+/* 续费周期标签：1 → 月付/年付；>1 → 每N天/周/个月/年 */
+function renewLabel(m){ return intervalLabel(m.rUnit, m.rNum); }
 function advanceRenew(m){m.nextRenew=stepDate(m.nextRenew,m.rUnit||'month',m.rNum||1);}
 /* 把续费起始日按周期向前推算到「今天或之后」的最近一次续费日 */
 function rollToFuture(ds,unit,num){
@@ -943,7 +973,7 @@ function renderSchedules(){
       }else{
         nxTxt='(近期无)';
       }
-      dateOrRep='🔁 '+repeatLabel(s.repeat)+' · '+nxTxt;
+      dateOrRep='🔁 '+repeatLabel(s.repeat,s)+' · '+nxTxt;
     }else{
       dateOrRep=esc(s.date);
     }
@@ -1209,6 +1239,10 @@ function delTodo(id){todos=todos.filter(function(x){return x.id!==id;});save('to
 function delNote(id){notes=notes.filter(function(x){return x.id!==id;});save('notes',notes);renderAll();}
 
 var schEditing=null;
+function toggleSchRepeatCustom(){
+  var rep=document.getElementById('schRepeat').value;
+  document.getElementById('schRepeatCustom').style.display=(rep==='custom')?'inline-flex':'none';
+}
 function resetSchForm(){
   document.getElementById('schTitle').value='';
   document.getElementById('schNote').value='';
@@ -1216,6 +1250,9 @@ function resetSchForm(){
   document.getElementById('schTime').value='';
   document.getElementById('schType').value='work';
   document.getElementById('schRepeat').value='none';
+  document.getElementById('schRNum').value='3';
+  document.getElementById('schRUnit').value='month';
+  toggleSchRepeatCustom();
   schEditing=null;
   document.getElementById('schAdd').textContent='添加';
   document.getElementById('schCancel').style.display='none';
@@ -1228,7 +1265,10 @@ function editSch(id){
   document.getElementById('schTime').value=s.time||'';
   document.getElementById('schType').value=s.type||'work';
   document.getElementById('schRepeat').value=s.repeat||'none';
+  document.getElementById('schRNum').value=s.rNum||3;
+  document.getElementById('schRUnit').value=s.rUnit||'month';
   document.getElementById('schNote').value=s.note||'';
+  toggleSchRepeatCustom();
   document.getElementById('schAdd').textContent='保存修改';
   document.getElementById('schCancel').style.display='';
   showAddZone('schAddZone');
@@ -1239,11 +1279,15 @@ document.getElementById('schAdd').onclick=function(){
   if(!t)return;
   var rep=document.getElementById('schRepeat').value;
   var date=document.getElementById('schDate').value||TODAY;
+  var rNum=parseInt(document.getElementById('schRNum').value)||1;
+  var rUnit=document.getElementById('schRUnit').value;
   if(schEditing){
     var s=schedules.find(function(x){return x.id===schEditing;});
-    if(s){s.title=t;s.date=date;s.time=document.getElementById('schTime').value||'';s.type=document.getElementById('schType').value;s.note=document.getElementById('schNote').value.trim();s.repeat=rep;}
+    if(s){s.title=t;s.date=date;s.time=document.getElementById('schTime').value||'';s.type=document.getElementById('schType').value;s.note=document.getElementById('schNote').value.trim();s.repeat=rep;if(rep==='custom'){s.rNum=rNum;s.rUnit=rUnit;}else{delete s.rNum;delete s.rUnit;}}
   }else{
-    schedules.push({id:uid(),title:t,date:date,time:document.getElementById('schTime').value||'',type:document.getElementById('schType').value,note:document.getElementById('schNote').value.trim(),repeat:rep,done:false,doneDates:[]});
+    var obj={id:uid(),title:t,date:date,time:document.getElementById('schTime').value||'',type:document.getElementById('schType').value,note:document.getElementById('schNote').value.trim(),repeat:rep,done:false,doneDates:[]};
+    if(rep==='custom'){obj.rNum=rNum;obj.rUnit=rUnit;}
+    schedules.push(obj);
   }
   save('schedules',schedules);
   resetSchForm();renderAll();

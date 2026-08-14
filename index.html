@@ -56,9 +56,10 @@
   .today.collapsed .today-body{display:none;}
   .mem-group-label{font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px;padding-left:2px;}
   .mem-group-label.sub{margin-left:8px;padding-left:8px;border-left:3px solid var(--line);}
-  .mem-track-label{font-size:13px;font-weight:700;color:var(--ink);margin:14px 0 6px;padding:7px 10px;background:#eef2fb;border-radius:9px;display:flex;align-items:center;gap:6px;}
-  .mem-track-label.work{background:#eaf1ff;}
-  .mem-track-label .cnt{font-size:12px;font-weight:600;color:var(--muted);margin-left:auto;}
+  .mem-track-label,.track-label{font-size:13px;font-weight:700;color:var(--ink);margin:14px 0 6px;padding:7px 10px;background:#eef2fb;border-radius:9px;display:flex;align-items:center;gap:6px;}
+  .mem-track-label.work,.track-label.work{background:#eaf1ff;}
+  .mem-track-label .cnt,.track-label .cnt{font-size:12px;font-weight:600;color:var(--muted);margin-left:auto;}
+  .track-label.future{background:#eaf6f1;}
   .mem-cat-tag{font-size:11px;color:var(--muted);background:#f1f3f7;border-radius:6px;padding:1px 6px;}
   .titem{
     display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
@@ -853,6 +854,57 @@ function nextOccurrence(s){
 }
 
 /* ============ 渲染：今天要处理 ============ */
+/* 工作/生活/未来 分组标题（工作在前、生活在后、未来最后） */
+function trackLabel(track,count){
+  if(track==='work')return '<div class="track-label work">💼 工作<span class="cnt">'+count+' 项</span></div>';
+  if(track==='future')return '<div class="track-label future">🔮 未来<span class="cnt">'+count+' 项</span></div>';
+  return '<div class="track-label">🏠 生活<span class="cnt">'+count+' 项</span></div>';
+}
+/* 取任意条目的归属：日程 type、待办 cat、会员 track；统一为 work/life/future */
+function itemTrack(it){
+  if(it.type==='sch')return (it.obj.type==='work')?'work':'life';
+  if(it.type==='todo'){var c=it.obj.cat;return (c==='work')?'work':(c==='life'?'life':'future');}
+  return (it.obj.track==='work')?'work':'life';
+}
+/* 今日要处理：单条目的 HTML（日程 / 待办 / 会员续费） */
+function todayItemHtml(it){
+  var o=it.obj;
+  if(it.type==='sch'){
+    var cat=o.type==='work'?'work':'life';
+    var done=schDoneOn(o,TODAY);
+    var isRep=!!o.repeat&&o.repeat!=='none';
+    var repTxt='';
+    if(isRep){
+      var nx=nextOccurrence(o);
+      var nxDow=nx?WK[new Date(nx+'T00:00:00').getDay()]:'';
+      repTxt=' · 🔁'+repeatLabel(o.repeat,o)+' · '+(nx?(nx===TODAY?('今天 '+fmtMD(nx)+' '+nxDow):('下次 '+fmtMD(nx)+' '+nxDow)):'(近期无)');
+    }
+    return '<div class="titem'+(done?' done':'')+'"><div class="ic" style="background:var(--'+cat+'-soft)">🗓️</div>'+
+      '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
+      '<div class="t2">'+esc(o.time||'')+' · '+(o.type==='work'?'工作':'生活')+repTxt+(o.note?' · '+esc(o.note):'')+'</div></div>'+
+      '<span class="pill '+cat+'">日程</span>'+
+      '<button class="btn ghost mini act" onclick="toggleSch(\''+o.id+'\')">'+(done?'已完':'完成')+'</button></div>';
+  }else if(it.type==='todo'){
+    var pill=it.overdue?'due':(it.soon?'soon':'');
+    var pillTxt=it.overdue?'逾期':(it.soon?'即将到期':'待办');
+    var cat2=o.cat==='work'?'work':(o.cat==='life'?'life':'future');
+    return '<div class="titem'+(it.overdue?' overdue':'')+'"><div class="ic" style="background:var(--'+cat2+'-soft)">✅</div>'+
+      '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
+      '<div class="t2">'+(o.cat==='work'?'工作':(o.cat==='life'?'生活':'未来'))+' · '+esc(o.pri)+(o.due?' · 截止 '+esc(o.due):'')+'</div></div>'+
+      '<span class="pill '+pill+'">'+pillTxt+'</span>'+
+      '<button class="btn ghost mini act" onclick="toggleTodo(\''+o.id+'\')">完成</button></div>';
+  }else{
+    var dl=daysBetween(TODAY,o.nextRenew);
+    var cnt=dl<0?('已逾期 '+Math.abs(dl)+' 天'):(dl===0?'今天到期':('还剩 '+dl+' 天'));
+    var mPill=it.overdue?'due':'soon';
+    var mPillTxt=it.overdue?'逾期续费':'即将续费';
+    return '<div class="titem'+(it.overdue?' overdue':'')+'"><div class="ic" style="background:var(--future-soft)">💳</div>'+
+      '<div class="body"><div class="t1">'+esc(o.name)+'</div>'+
+      '<div class="t2">'+(o.track==='work'?'工作':'生活')+' · ¥'+esc(o.amount)+' '+renewLabel(o)+' · 续费 '+esc(o.nextRenew)+'（'+cnt+'）'+(o.auto==='on'?' · 自动':'')+'</div></div>'+
+      '<span class="pill '+mPill+'">'+mPillTxt+'</span>'+
+      '<button class="btn ghost mini act" onclick="renewed(\''+o.id+'\')">已续费</button></div>';
+  }
+}
 function renderToday(){
   var list=document.getElementById('todayList');
   var line=document.getElementById('todayLine');
@@ -878,42 +930,14 @@ function renderToday(){
   line.textContent=od>0?('有 '+od+' 项已逾期，建议优先处理'):('共 '+items.length+' 项，加油！');
 
   var html='';
-  items.forEach(function(it){
-    var o=it.obj;
-    if(it.type==='sch'){
-      var cat=o.type==='work'?'work':'life';
-      var done=schDoneOn(o,TODAY);
-      var isRep=!!o.repeat&&o.repeat!=='none';
-      var repTxt='';
-      if(isRep){
-        var nx=nextOccurrence(o);
-        var nxDow=nx?WK[new Date(nx+'T00:00:00').getDay()]:'';
-        repTxt=' · 🔁'+repeatLabel(o.repeat,o)+' · '+(nx?(nx===TODAY?('今天 '+fmtMD(nx)+' '+nxDow):('下次 '+fmtMD(nx)+' '+nxDow)):'(近期无)');
-      }
-      html+='<div class="titem'+(done?' done':'')+'"><div class="ic" style="background:var(--'+cat+'-soft)">🗓️</div>'+
-        '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
-        '<div class="t2">'+esc(o.time||'')+' · '+(o.type==='work'?'工作':'生活')+repTxt+(o.note?' · '+esc(o.note):'')+'</div></div>'+
-        '<span class="pill '+cat+'">日程</span>'+
-        '<button class="btn ghost mini act" onclick="toggleSch(\''+o.id+'\')">'+(done?'已完':'完成')+'</button></div>';
-    }else if(it.type==='todo'){
-      var pill=it.overdue?'due':(it.soon?'soon':'');
-      var pillTxt=it.overdue?'逾期':(it.soon?'即将到期':'待办');
-      var cat2=o.cat==='work'?'work':(o.cat==='life'?'life':'future');
-      html+='<div class="titem'+(it.overdue?' overdue':'')+'"><div class="ic" style="background:var(--'+cat2+'-soft)">✅</div>'+
-        '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
-        '<div class="t2">'+(o.cat==='work'?'工作':(o.cat==='life'?'生活':'未来'))+' · '+esc(o.pri)+(o.due?' · 截止 '+esc(o.due):'')+'</div></div>'+
-        '<span class="pill '+pill+'">'+pillTxt+'</span>'+
-        '<button class="btn ghost mini act" onclick="toggleTodo(\''+o.id+'\')">完成</button></div>';
-    }else if(it.type==='mem'){
-      var dl=daysBetween(TODAY,o.nextRenew);
-      var cnt=dl<0?('已逾期 '+Math.abs(dl)+' 天'):(dl===0?'今天到期':('还剩 '+dl+' 天'));
-      var mPill=it.overdue?'due':'soon';
-      var mPillTxt=it.overdue?'逾期续费':'即将续费';
-      html+='<div class="titem'+(it.overdue?' overdue':'')+'"><div class="ic" style="background:var(--future-soft)">💳</div>'+
-        '<div class="body"><div class="t1">'+esc(o.name)+'</div>'+
-        '<div class="t2">'+(o.track==='work'?'工作':'生活')+' · ¥'+esc(o.amount)+' '+renewLabel(o)+' · 续费 '+esc(o.nextRenew)+'（'+cnt+'）'+(o.auto==='on'?' · 自动':'')+'</div></div>'+
-        '<span class="pill '+mPill+'">'+mPillTxt+'</span>'+
-        '<button class="btn ghost mini act" onclick="renewed(\''+o.id+'\')">已续费</button></div>';
+  var order=['work','life','future'];
+  var buckets={work:[],life:[],future:[]};
+  items.forEach(function(it){(buckets[itemTrack(it)]||buckets.life).push(it);});
+  order.forEach(function(tr){
+    var arr=buckets[tr];
+    if(arr.length){
+      html+=trackLabel(tr,arr.length);
+      arr.forEach(function(it){html+=todayItemHtml(it);});
     }
   });
   list.innerHTML=html;
@@ -1008,7 +1032,10 @@ function renderSchedules(){
   document.getElementById('schCount').textContent=all.length+' 条';
   if(all.length===0){box.innerHTML='<div class="empty">还没有日程，添加一条吧～</div>';return;}
   var html='';
-  active.forEach(function(s){html+=itemHtml(s);});
+  var work=active.filter(function(s){return s.type==='work';});
+  var life=active.filter(function(s){return s.type!=='work';});
+  if(work.length)html+=trackLabel('work',work.length)+work.map(itemHtml).join('');
+  if(life.length)html+=trackLabel('life',life.length)+life.map(itemHtml).join('');
   if(done.length>0){
     html+='<div class="done-fold'+(schDoneOpen?' open':'')+'" onclick="toggleSchDone()">已完成 '+done.length+' 项 <span class="caret">▾</span></div>';
     if(schDoneOpen)done.forEach(function(s){html+=itemHtml(s);});
@@ -1046,7 +1073,12 @@ function renderTodos(){
       '<button class="del" onclick="delTodo(\''+t.id+'\')">删除</button></div>';
   }
   var html='';
-  active.forEach(function(t){html+=itemHtml(t);});
+  var work=active.filter(function(t){return t.cat==='work';});
+  var life=active.filter(function(t){return t.cat==='life';});
+  var future=active.filter(function(t){return t.cat!=='work'&&t.cat!=='life';});
+  if(work.length)html+=trackLabel('work',work.length)+work.map(itemHtml).join('');
+  if(life.length)html+=trackLabel('life',life.length)+life.map(itemHtml).join('');
+  if(future.length)html+=trackLabel('future',future.length)+future.map(itemHtml).join('');
   if(done.length>0){
     html+='<div class="done-fold'+(doneOpen?' open':'')+'" onclick="toggleDone()">已完成 '+done.length+' 项 <span class="caret">▾</span></div>';
     if(doneOpen){done.forEach(function(t){html+=itemHtml(t);});}

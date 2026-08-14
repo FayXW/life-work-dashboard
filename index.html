@@ -392,7 +392,7 @@
             <option value="quarter">季付</option>
             <option value="year">年付</option>
           </select>
-          <input type="date" id="memNext" class="grow" placeholder="下次续费日">
+          <input type="date" id="memNext" class="grow" placeholder="开通时间（续费自动推算）">
           <select id="memAuto">
             <option value="on">自动续费：开</option>
             <option value="off">自动续费：关</option>
@@ -843,6 +843,20 @@ function cycleMonths(c){return c==='year'?12:(c==='quarter'?3:1);}
 function cycleLabel(c){return c==='year'?'年付':(c==='quarter'?'季付':'月付');}
 function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
 function advanceRenew(m){m.nextRenew=addMonths(m.nextRenew,cycleMonths(m.cycle));}
+/* 把续费起始日按周期向前推算到「今天或之后」的最近一次续费日 */
+function rollToFuture(ds, cycle){
+  if(!ds) return '';
+  var step=cycleMonths(cycle||'month'), d=ds, g=0;
+  while(daysBetween(TODAY,d)<0 && g<600){ d=addMonths(d,step); g++; }
+  return d;
+}
+/* 校正自动续费卡的 nextRenew：若仍停留在过去则滚动到未来；返回是否修改过 */
+function normalizeRenew(m){
+  if(m.type!=='auto'||!m.nextRenew) return false;
+  var d=rollToFuture(m.nextRenew, m.cycle);
+  if(d && d!==m.nextRenew){ m.nextRenew=d; return true; }
+  return false;
+}
 
 /* ============ 渲染：日程 ============ */
 var schDoneOpen=false;
@@ -975,32 +989,30 @@ function renderMembers(){
         '<span>限用至 '+esc(m.expireDate||'-')+'</span>'+
         (m.note?'<span>'+esc(m.note)+'</span>':'')+'</div>';
       var recs=(m.records||[]);
-      if(recs.length){
-        var open=memRecsOpen.has(m.id);
-        html+='<div class="mem-recs-toggle'+(open?' open':'')+'" onclick="toggleMemRecs(\''+m.id+'\')">消费记录 '+recs.length+' 笔 <span class="caret">▾</span></div>'+
-          '<div class="mem-recs-body'+(open?'':' collapsed')+'">';
-        recs.slice().reverse().forEach(function(r){
-          if(editingConsume&&editingConsume.memId===m.id&&editingConsume.recId===r.id){
-            html+='<div class="mem-rec editing">'+
-              '<input type="date" class="mini-inp" id="ed_cd_'+r.id+'" value="'+esc(r.date||'')+'">'+
-              '<input type="number" class="mini-inp amt" id="ed_ca_'+r.id+'" value="'+esc(r.amount)+'" min="0" step="0.01">'+
-              '<input class="mini-inp note" id="ed_cn_'+r.id+'" value="'+esc(r.note||'')+'" placeholder="备注">'+
-              '<button class="btn save" onclick="saveConsume(\''+m.id+'\',\''+r.id+'\')">存</button>'+
-              '<button class="btn cancel" onclick="cancelEditConsume()">撤</button></div>';
-          }else{
-            html+='<div class="mem-rec"><span>'+esc(r.date||'-')+'</span><span>'+esc(r.note||'消费')+'</span>'+
-              '<span class="amt">-¥'+esc(r.amount)+'</span>'+
-              '<button class="del" onclick="editConsume(\''+m.id+'\',\''+r.id+'\')">改</button>'+
-              '<button class="del" onclick="delConsume(\''+m.id+'\',\''+r.id+'\')">删</button></div>';
-          }
-        });
-        html+='</div>';
-      }
+      var open=memRecsOpen.has(m.id);
+      html+='<div class="mem-recs-toggle'+(open?' open':'')+'" onclick="toggleMemRecs(\''+m.id+'\')">消费记录 '+recs.length+' 笔 <span class="caret">▾</span></div>'+
+        '<div class="mem-recs-body'+(open?'':' collapsed')+'">';
+      recs.slice().reverse().forEach(function(r){
+        if(editingConsume&&editingConsume.memId===m.id&&editingConsume.recId===r.id){
+          html+='<div class="mem-rec editing">'+
+            '<input type="date" class="mini-inp" id="ed_cd_'+r.id+'" value="'+esc(r.date||'')+'">'+
+            '<input type="number" class="mini-inp amt" id="ed_ca_'+r.id+'" value="'+esc(r.amount)+'" min="0" step="0.01">'+
+            '<input class="mini-inp note" id="ed_cn_'+r.id+'" value="'+esc(r.note||'')+'" placeholder="备注">'+
+            '<button class="btn save" onclick="saveConsume(\''+m.id+'\',\''+r.id+'\')">存</button>'+
+            '<button class="btn cancel" onclick="cancelEditConsume()">撤</button></div>';
+        }else{
+          html+='<div class="mem-rec"><span>'+esc(r.date||'-')+'</span><span>'+esc(r.note||'消费')+'</span>'+
+            '<span class="amt">-¥'+esc(r.amount)+'</span>'+
+            '<button class="del" onclick="editConsume(\''+m.id+'\',\''+r.id+'\')">改</button>'+
+            '<button class="del" onclick="delConsume(\''+m.id+'\',\''+r.id+'\')">删</button></div>';
+        }
+      });
       html+='<div class="mem-add-consume">'+
         '<input type="date" id="cd_'+m.id+'" placeholder="消费日期">'+
         '<input type="number" id="ca_'+m.id+'" placeholder="金额" min="0" step="0.01">'+
         '<input class="grow" id="cn_'+m.id+'" placeholder="备注（选填）">'+
         '<button class="btn mini" onclick="addConsume(\''+m.id+'\')">记一笔消费</button></div>';
+      html+='</div>';
     }else{
       var dl=daysBetween(TODAY,m.nextRenew);
       var cnt=dl<0?('已逾期 '+Math.abs(dl)+' 天'):(dl===0?'今天到期':('还剩 '+dl+' 天'));
@@ -1558,6 +1570,9 @@ function syncRenewTodos(){
 }
 
 function renderAll(){
+  var changed=false;
+  members.forEach(function(m){ if(normalizeRenew(m)) changed=true; });
+  if(changed) save('members',members);
   renderToday();renderSchedules();syncRenewTodos();renderTodos();renderNotes();renderMembers();renderCalendar();
   // 备份提示
   var total=schedules.length+todos.length+notes.length;

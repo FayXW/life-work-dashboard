@@ -1202,11 +1202,13 @@ function collectData(){return {schedules:schedules,todos:todos,notes:notes,membe
 function applyData(d){
   if(!d)return;
   syncing=true;
-  schedules=mergeArr(schedules,d.schedules);
-  todos=mergeArr(todos,d.todos);
-  notes=mergeArr(notes,d.notes);
-  members=mergeArr(members,d.members);
+  // 以云端数据为准整体覆盖，保证各端完全一致（含清除本端残留的演示数据）
+  schedules=(d.schedules||[]);
+  todos=(d.todos||[]);
+  notes=(d.notes||[]);
+  members=(d.members||[]);
   if(d.settings)settings=d.settings;
+  if(!has('seeded'))localStorage.setItem(PREFIX+'seeded','1');
   save('schedules',schedules);save('todos',todos);save('notes',notes);save('members',members);save('settings',settings);
   syncing=false;
 }

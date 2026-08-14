@@ -232,6 +232,28 @@
 
   <div class="grid">
 
+    <!-- 日历 & 天气（置顶·默认折叠） -->
+    <section class="card collapsed">
+      <h3 onclick="toggleCard(this)">🌤️ 今日日历 & 天气<span class="caret">▾</span></h3>
+      <div class="cal-head">
+        <div class="mon" id="calMon"></div>
+        <div class="cal-nav">
+          <button id="calPrev">‹</button>
+          <button id="calToday">今</button>
+          <button id="calNext">›</button>
+        </div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+
+      <div class="lh-panel" id="lhPanel"></div>
+
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:13px;color:var(--muted);">实时气温</div>
+        <button class="btn ghost mini" id="wxRefresh">刷新</button>
+      </div>
+      <div class="wx" id="wxBox" style="margin-top:8px;"></div>
+    </section>
+
     <!-- 模块1：今日日程 -->
     <section class="card">
       <h3 onclick="toggleCard(this)">🗓️ 今日日程 <span class="count" id="schCount"></span><span class="caret">▾</span></h3>
@@ -357,28 +379,6 @@
         <input class="grow" id="memNote" placeholder="备注（选填，如：绑定的卡/账号）">
       </div>
       <div class="list" id="memList"></div>
-    </section>
-
-    <!-- 模块4：今日日历 & 天气 -->
-    <section class="card collapsed">
-      <h3 onclick="toggleCard(this)">🌤️ 今日日历 & 天气<span class="caret">▾</span></h3>
-      <div class="cal-head">
-        <div class="mon" id="calMon"></div>
-        <div class="cal-nav">
-          <button id="calPrev">‹</button>
-          <button id="calToday">今</button>
-          <button id="calNext">›</button>
-        </div>
-      </div>
-      <div class="cal-grid" id="calGrid"></div>
-
-      <div class="lh-panel" id="lhPanel"></div>
-
-      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;color:var(--muted);">实时气温</div>
-        <button class="btn ghost mini" id="wxRefresh">刷新</button>
-      </div>
-      <div class="wx" id="wxBox" style="margin-top:8px;"></div>
     </section>
 
   </div>
@@ -815,18 +815,11 @@ function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+
 function advanceRenew(m){m.nextRenew=addMonths(m.nextRenew,cycleMonths(m.cycle));}
 
 /* ============ 渲染：日程 ============ */
+var schDoneOpen=false;
+function toggleSchDone(){schDoneOpen=!schDoneOpen;renderSchedules();}
 function renderSchedules(){
   var box=document.getElementById('schList');
-  var all=schedules.slice().sort(function(a,b){
-    var ka=(!a.repeat||a.repeat==='none')?a.date:'2099-12-31';
-    var kb=(!b.repeat||b.repeat==='none')?b.date:'2099-12-31';
-    if(ka!==kb)return ka<kb?-1:1;
-    return (a.time||'').localeCompare(b.time||'');
-  });
-  document.getElementById('schCount').textContent=all.length+' 条';
-  if(all.length===0){box.innerHTML='<div class="empty">还没有日程，添加一条吧～</div>';return;}
-  var html='';
-  all.forEach(function(s){
+  function itemHtml(s){
     var cat=s.type==='work'?'work':'life';
     var isRep=!!s.repeat&&s.repeat!=='none';
     var done=schDoneOn(s,TODAY);
@@ -844,13 +837,29 @@ function renderSchedules(){
     }else{
       dateOrRep=esc(s.date);
     }
-    html+='<div class="li'+(done?' done':'')+'"><div class="chk" onclick="toggleSch(\''+s.id+'\')">'+(done?'✓':'')+'</div>'+
+    return '<div class="li'+(done?' done':'')+'"><div class="chk" onclick="toggleSch(\''+s.id+'\')">'+(done?'✓':'')+'</div>'+
       '<div class="li-body"><div class="li-title">'+esc(s.title)+'</div>'+
       '<div class="li-meta"><span class="pill '+cat+'">'+(s.type==='work'?'工作':'生活')+'</span>'+
       '<span>'+dateOrRep+(s.time?' '+esc(s.time):'')+'</span>'+(s.note?'<span>'+esc(s.note)+'</span>':'')+'</div></div>'+
       '<button class="del" onclick="editSch(\''+s.id+'\')">编辑</button>'+
       '<button class="del" onclick="delSch(\''+s.id+'\')">删除</button></div>';
+  }
+  var all=schedules.slice().sort(function(a,b){
+    var ka=(!a.repeat||a.repeat==='none')?a.date:'2099-12-31';
+    var kb=(!b.repeat||b.repeat==='none')?b.date:'2099-12-31';
+    if(ka!==kb)return ka<kb?-1:1;
+    return (a.time||'').localeCompare(b.time||'');
   });
+  var active=all.filter(function(s){return !schDoneOn(s,TODAY);});
+  var done=all.filter(function(s){return schDoneOn(s,TODAY);});
+  document.getElementById('schCount').textContent=all.length+' 条';
+  if(all.length===0){box.innerHTML='<div class="empty">还没有日程，添加一条吧～</div>';return;}
+  var html='';
+  active.forEach(function(s){html+=itemHtml(s);});
+  if(done.length>0){
+    html+='<div class="done-fold'+(schDoneOpen?' open':'')+'" onclick="toggleSchDone()">已完成 '+done.length+' 项 <span class="caret">▾</span></div>';
+    if(schDoneOpen)done.forEach(function(s){html+=itemHtml(s);});
+  }
   box.innerHTML=html;
 }
 
@@ -1445,8 +1454,37 @@ document.getElementById('setSave').onclick=function(){
 };
 
 /* ============ 总渲染 ============ */
+/* ============ 续费/到期前一周 自动加入待办 ============ */
+function syncRenewTodos(){
+  var valid={},toAdd=[];
+  members.forEach(function(m){
+    var date,title;
+    if(m.type==='recharge'){
+      if(!m.expire)return;
+      var de=daysBetween(TODAY,m.expire);
+      if(de<0||de>7)return;
+      var bal=(parseFloat(m.charge)||0)-((m.records||[]).reduce(function(s,r){return s+(parseFloat(r.amount)||0);},0));
+      date=m.expire;
+      title='💳 充值卡到期提醒：'+m.name+' 将于 '+m.expire+' 到期（余额 ¥'+bal+'）';
+    }else{
+      if(!m.nextRenew)return;
+      var dr=daysBetween(TODAY,m.nextRenew);
+      if(dr<0||dr>7)return;
+      date=m.nextRenew;
+      title='💳 续费提醒：'+m.name+' 将于 '+m.nextRenew+' 续费 ¥'+m.amount+'（'+cycleLabel(m.cycle||'month')+'）';
+    }
+    var rid='renew-'+m.id;valid[rid]=true;
+    var ex=todos.find(function(t){return t.id===rid;});
+    if(!ex)toAdd.push({id:rid,title:title,cat:'work',pri:'P1',due:date,auto:true,created:Date.now()});
+  });
+  if(toAdd.length)toAdd.forEach(function(t){todos.push(t);});
+  var before=todos.length;
+  todos=todos.filter(function(t){return (!t.auto)||valid[t.id];});
+  if(toAdd.length||todos.length!==before)save('todos',todos);
+}
+
 function renderAll(){
-  renderToday();renderSchedules();renderTodos();renderNotes();renderMembers();renderCalendar();
+  renderToday();renderSchedules();syncRenewTodos();renderTodos();renderNotes();renderMembers();renderCalendar();
   // 备份提示
   var total=schedules.length+todos.length+notes.length;
   var b=document.getElementById('backupBanner');

@@ -1213,7 +1213,15 @@ function applyData(d){
   save('schedules',schedules);save('todos',todos);save('notes',notes);save('members',members);save('settings',settings);
   syncing=false;
 }
-function setSyncStatus(txt,cls){var e=document.getElementById('syncStatus');if(e){e.textContent=txt;e.className='st '+(cls||'');}}
+function setSyncStatus(txt,cls){
+  var e=document.getElementById('syncStatus');
+  if(e){
+    e.textContent=txt;e.className='st '+(cls||'');
+    // 仅失败状态保留可点击查看详情
+    if(cls==='err'){e.style.cursor='help';e.title='点击查看详细错误';}
+    else{e.style.cursor='';e.title='';e.onclick=null;}
+  }
+}
 function checkCrypto(){if(!window.crypto||!crypto.subtle){setSyncStatus('需 HTTPS 环境才能同步','err');return false;}return true;}
 async function pushSync(){
   if(!syncCfg.enabled||!syncCfg.token||!syncCfg.user||!syncCfg.repo||!syncCfg.pass)return;
@@ -1238,7 +1246,20 @@ async function pullSync(){
     applyData(d);renderAll();
     syncCfg.lastSync=Date.now();save('syncCfg',syncCfg);
     setSyncStatus('已同步 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}),'ok');
-  }catch(e){setSyncStatus('拉取失败：'+e.message,'err');}
+  }catch(e){
+    // AES-GCM 解密失败（OperationError）— 最常见原因是同步密码与加密时不一致
+    var name=e&&e.name?name:'';
+    var hint='';
+    if(/decrypt|operation|AES|GCM/i.test(name+' '+(e&&e.message))){
+      hint='\n(疑似：同步密码与加密时不一致，请检查两端设置里的「同步密码」是否完全相同，包括大小写、空格)';
+    }else if(/GitHub|401|403|404|读取|写入/i.test(e&&e.message)){
+      hint='\n(疑似：GitHub 仓库读取失败，检查用户名/仓库名/令牌是否正确)';
+    }
+    setSyncStatus('拉取失败（点这里查看详情）','err');
+    window._lastSyncErr=String(name||'')+': '+(e&&e.message?e.message:e)+hint;
+    var el=document.getElementById('syncStatus');
+    if(el){el.style.cursor='help';el.title='点击查看详情';el.onclick=function(){alert(window._lastSyncErr);};}
+  }
 }
 function schedulePush(){
   if(syncing)return;

@@ -834,7 +834,8 @@ function matchRepeat(s,ds){
   return false;
 }
 function schDoneOn(s,ds){if(!s.repeat||s.repeat==='none')return !!s.done;return (s.doneDates||[]).indexOf(ds)>=0;}
-function toggleSchDone(s,ds){
+/* 标记某日程在 ds 这一天为完成/未完成（注意与 UI 折叠函数 toggleSchDone() 区分命名，避免覆盖） */
+function markSchDone(s,ds){
   if(!s.repeat||s.repeat==='none'){s.done=!s.done;return;}
   if(!s.doneDates)s.doneDates=[];
   var i=s.doneDates.indexOf(ds);
@@ -911,8 +912,8 @@ function renderToday(){
   var items=[];
   // 逾期待办
   todos.forEach(function(t){if(!t.done&&t.due&&t.due<TODAY){items.push({type:'todo',obj:t,overdue:true});}});
-  // 今天日程（含重复命中）
-  schedules.filter(function(s){return matchRepeat(s,TODAY);}).sort(function(a,b){return (a.time||'').localeCompare(b.time||'');})
+  // 今天日程（含重复命中；已完成今天的不再列入，避免「打勾后还在里面」）
+  schedules.filter(function(s){return matchRepeat(s,TODAY)&&!schDoneOn(s,TODAY);}).sort(function(a,b){return (a.time||'').localeCompare(b.time||'');})
     .forEach(function(s){items.push({type:'sch',obj:s});});
   // 今天待办
   todos.forEach(function(t){if(!t.done&&t.due===TODAY){items.push({type:'todo',obj:t});}});
@@ -1299,7 +1300,7 @@ function renderLao(){
 }
 
 /* ============ 交互 ============ */
-function toggleSch(id){var t=schedules.find(function(x){return x.id===id;});if(t){toggleSchDone(t,TODAY);save('schedules',schedules);renderAll();}}
+function toggleSch(id){var t=schedules.find(function(x){return x.id===id;});if(t){markSchDone(t,TODAY);save('schedules',schedules);renderAll();}}
 function toggleTodo(id){var t=todos.find(function(x){return x.id===id;});if(t){t.done=!t.done;save('todos',todos);renderAll();}}
 function delSch(id){schedules=schedules.filter(function(x){return x.id!==id;});save('schedules',schedules);renderAll();}
 function delTodo(id){todos=todos.filter(function(x){return x.id!==id;});save('todos',todos);renderAll();}

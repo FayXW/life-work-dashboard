@@ -333,6 +333,7 @@
           <button class="btn ghost" id="schCancel" style="display:none">取消</button>
         </div>
         <div class="form">
+          <span class="inlbl">结束日期 <input type="date" id="schEndDate" onchange="onSchEndChange()"></span>
           <input class="grow" id="schNote" placeholder="备注（选填）">
         </div>
       </div>
@@ -815,6 +816,7 @@ function nextInterval(s,from){
   return cur;
 }
 function matchRepeat(s,ds){
+  if(s.endDate && s.endDate>=s.date) return ds>=s.date && ds<=s.endDate; // 多日区间事件
   if(!s.repeat||s.repeat==='none')return s.date===ds;
   if(s.repeat==='custom')return isOnInterval(s,ds);
   var d=new Date(ds+'T00:00:00');var dow=d.getDay();
@@ -875,14 +877,17 @@ function todayItemHtml(it){
     var done=schDoneOn(o,TODAY);
     var isRep=!!o.repeat&&o.repeat!=='none';
     var repTxt='';
+    var rangeTxt='';
     if(isRep){
       var nx=nextOccurrence(o);
       var nxDow=nx?WK[new Date(nx+'T00:00:00').getDay()]:'';
       repTxt=' · 🔁'+repeatLabel(o.repeat,o)+' · '+(nx?(nx===TODAY?('今天 '+fmtMD(nx)+' '+nxDow):('下次 '+fmtMD(nx)+' '+nxDow)):'(近期无)');
+    }else if(o.endDate && o.endDate>o.date){
+      rangeTxt=' · 📅 '+fmtMD(o.date)+'–'+fmtMD(o.endDate);
     }
     return '<div class="titem'+(done?' done':'')+'"><div class="ic" style="background:var(--'+cat+'-soft)">🗓️</div>'+
       '<div class="body"><div class="t1">'+esc(o.title)+'</div>'+
-      '<div class="t2">'+esc(o.time||'')+' · '+(o.type==='work'?'工作':'生活')+repTxt+(o.note?' · '+esc(o.note):'')+'</div></div>'+
+      '<div class="t2">'+esc(o.time||'')+' · '+(o.type==='work'?'工作':'生活')+repTxt+rangeTxt+(o.note?' · '+esc(o.note):'')+'</div></div>'+
       '<span class="pill '+cat+'">日程</span>'+
       '<button class="btn ghost mini act" onclick="toggleSch(\''+o.id+'\')">'+(done?'已完':'完成')+'</button></div>';
   }else if(it.type==='todo'){
@@ -1013,7 +1018,8 @@ function renderSchedules(){
       }
       dateOrRep='🔁 '+repeatLabel(s.repeat,s)+' · '+nxTxt;
     }else{
-      dateOrRep=esc(s.date);
+      if(s.endDate && s.endDate>s.date) dateOrRep='📅 '+fmtMD(s.date)+' – '+fmtMD(s.endDate);
+      else dateOrRep=esc(s.date);
     }
     return '<div class="li'+(done?' done':'')+'"><div class="chk" onclick="toggleSch(\''+s.id+'\')">'+(done?'✓':'')+'</div>'+
       '<div class="li-body"><div class="li-title">'+esc(s.title)+'</div>'+
@@ -1307,9 +1313,16 @@ function delTodo(id){todos=todos.filter(function(x){return x.id!==id;});save('to
 function delNote(id){notes=notes.filter(function(x){return x.id!==id;});save('notes',notes);renderAll();}
 
 var schEditing=null;
+function onSchEndChange(){
+  if(document.getElementById('schEndDate').value){
+    document.getElementById('schRepeat').value='none';
+    toggleSchRepeatCustom();
+  }
+}
 function toggleSchRepeatCustom(){
   var rep=document.getElementById('schRepeat').value;
   document.getElementById('schRepeatCustom').style.display=(rep==='custom')?'inline-flex':'none';
+  if(rep!=='none')document.getElementById('schEndDate').value='';
 }
 function resetSchForm(){
   document.getElementById('schTitle').value='';
@@ -1318,6 +1331,7 @@ function resetSchForm(){
   document.getElementById('schTime').value='';
   document.getElementById('schType').value='work';
   document.getElementById('schRepeat').value='none';
+  document.getElementById('schEndDate').value='';
   document.getElementById('schRNum').value='3';
   document.getElementById('schRUnit').value='month';
   toggleSchRepeatCustom();
@@ -1337,6 +1351,7 @@ function editSch(id){
   document.getElementById('schRUnit').value=s.rUnit||'month';
   document.getElementById('schNote').value=s.note||'';
   toggleSchRepeatCustom();
+  document.getElementById('schEndDate').value=s.endDate||'';
   document.getElementById('schAdd').textContent='保存修改';
   document.getElementById('schCancel').style.display='';
   showAddZone('schAddZone');
@@ -1347,13 +1362,17 @@ document.getElementById('schAdd').onclick=function(){
   if(!t)return;
   var rep=document.getElementById('schRepeat').value;
   var date=document.getElementById('schDate').value||TODAY;
+  var endDateRaw=document.getElementById('schEndDate').value||'';
+  var endDate=(endDateRaw && endDateRaw>date)?endDateRaw:'';
   var rNum=parseInt(document.getElementById('schRNum').value)||1;
   var rUnit=document.getElementById('schRUnit').value;
+  if(endDate)rep='none';
   if(schEditing){
     var s=schedules.find(function(x){return x.id===schEditing;});
-    if(s){s.title=t;s.date=date;s.time=document.getElementById('schTime').value||'';s.type=document.getElementById('schType').value;s.note=document.getElementById('schNote').value.trim();s.repeat=rep;if(rep==='custom'){s.rNum=rNum;s.rUnit=rUnit;}else{delete s.rNum;delete s.rUnit;}}
+    if(s){s.title=t;s.date=date;s.time=document.getElementById('schTime').value||'';s.type=document.getElementById('schType').value;s.note=document.getElementById('schNote').value.trim();s.repeat=rep;if(rep==='custom'){s.rNum=rNum;s.rUnit=rUnit;}else{delete s.rNum;delete s.rUnit;}if(endDate)s.endDate=endDate;else delete s.endDate;}
   }else{
     var obj={id:uid(),title:t,date:date,time:document.getElementById('schTime').value||'',type:document.getElementById('schType').value,note:document.getElementById('schNote').value.trim(),repeat:rep,done:false,doneDates:[]};
+    if(endDate)obj.endDate=endDate;
     if(rep==='custom'){obj.rNum=rNum;obj.rUnit=rUnit;}
     schedules.push(obj);
   }
@@ -1831,6 +1850,12 @@ function parseAmount(s){
   if(m) return parseFloat(m[1]);
   return 0;
 }
+function parseEndDate(s){
+  if(!s)return '';
+  var m=s.match(/(?:至|到|[-—~])\s*(\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}|\d{1,2}月\d{1,2}[日号]?|\d{1,2}[./]\d{1,2})/);
+  if(!m)return '';
+  return parseNatDate(m[1]);
+}
 function classifyLine(line){
   var date=parseNatDate(line), time=parseTime(line);
   var title=line.replace(/[¥￥]\s*\d+(?:\.\d+)?/g,'')
@@ -1877,7 +1902,10 @@ function classifyLine(line){
   }
   if(date){
     var st=/生活|个人|家里|家人|健身|宠物|狗|猫|旅行|旅游|体检|就医|玩|聚会|朋友/.test(line)?'life':'work';
-    return {type:'sch',title:title||line,date:date,time:time,schType:st};
+    var endDate=parseEndDate(line);
+    var tt=title;
+    if(endDate)tt=tt.replace(/\s*(?:至|到|[-—~])\s*$/,'').trim();
+    return {type:'sch',title:tt||line,date:date,time:time,schType:st,endDate:endDate};
   }
   return {type:'todo',title:title||line,due:'',cat:'work',pri:'P1'};
 }
@@ -1902,6 +1930,7 @@ function renderQuickPreview(){
       html+='<input class="grow" id="qf_title_'+idx+'" value="'+esc(it.title||'')+'" placeholder="标题" onchange="qiField('+idx+',\'title\',this.value)">'+
         '<input type="date" id="qf_date_'+idx+'" value="'+(it.date||'')+'" onchange="qiField('+idx+',\'date\',this.value)">'+
         '<input type="time" id="qf_time_'+idx+'" value="'+(it.time||'')+'" onchange="qiField('+idx+',\'time\',this.value)">'+
+        '<span class="inlbl">至 <input type="date" id="qf_enddate_'+idx+'" value="'+(it.endDate||'')+'" onchange="qiField('+idx+',\'endDate\',this.value)"></span>'+
         '<select id="qf_schtype_'+idx+'" onchange="qiField('+idx+',\'schType\',this.value)"><option value="work"'+(it.schType!=='life'?' selected':'')+'>工作</option><option value="life"'+(it.schType==='life'?' selected':'')+'>生活</option></select>';
     }else if(it.type==='todo'){
       html+='<input class="grow" id="qf_title_'+idx+'" value="'+esc(it.title||'')+'" placeholder="标题" onchange="qiField('+idx+',\'title\',this.value)">'+
@@ -1952,7 +1981,7 @@ function qiReadDom(i){
   var it=parsedItems[i];if(!it)return;
   var v=function(id){var e=document.getElementById(id);return e?e.value:'';};
   if(it.type==='sch'){
-    it.title=v('qf_title_'+i);it.date=v('qf_date_'+i);it.time=v('qf_time_'+i);it.schType=v('qf_schtype_'+i);
+    it.title=v('qf_title_'+i);it.date=v('qf_date_'+i);it.time=v('qf_time_'+i);it.schType=v('qf_schtype_'+i);it.endDate=v('qf_enddate_'+i);
   }else if(it.type==='todo'){
     it.title=v('qf_title_'+i);it.due=v('qf_due_'+i);it.cat=v('qf_cat_'+i);it.pri=v('qf_pri_'+i);
   }else{
@@ -1968,7 +1997,10 @@ function quickImport(){
     if(it.include===false)return;
     if(it.type==='sch'){
       var t=(it.title||'').trim();if(!t)return;
-      schedules.push({id:uid(),title:t,date:it.date||TODAY,time:it.time||'',type:it.schType||'work',note:'',repeat:'none',done:false,doneDates:[]});
+      var ed=(it.endDate && it.endDate>it.date)?it.endDate:'';
+      var obj={id:uid(),title:t,date:it.date||TODAY,time:it.time||'',type:it.schType||'work',note:'',repeat:'none',done:false,doneDates:[]};
+      if(ed)obj.endDate=ed;
+      schedules.push(obj);
       added.sch++;
     }else if(it.type==='todo'){
       var t2=(it.title||'').trim();if(!t2)return;

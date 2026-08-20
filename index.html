@@ -838,7 +838,7 @@ function matchRepeat(s,ds){
 function schDoneOn(s,ds){if(!s.repeat||s.repeat==='none')return !!s.done;return (s.doneDates||[]).indexOf(ds)>=0;}
 /* 标记某日程在 ds 这一天为完成/未完成（注意与 UI 折叠函数 toggleSchDone() 区分命名，避免覆盖） */
 function markSchDone(s,ds){
-  if(!s.repeat||s.repeat==='none'){s.done=!s.done;return;}
+  if(!s.repeat||s.repeat==='none'){s.done=!s.done; if(s.done){s.doneAt=TODAY;}else{delete s.doneAt;} return;}
   if(!s.doneDates)s.doneDates=[];
   var i=s.doneDates.indexOf(ds);
   if(i>=0)s.doneDates.splice(i,1);else s.doneDates.push(ds);
@@ -1307,7 +1307,7 @@ function renderLao(){
 
 /* ============ 交互 ============ */
 function toggleSch(id){var t=schedules.find(function(x){return x.id===id;});if(t){markSchDone(t,TODAY);save('schedules',schedules);renderAll();}}
-function toggleTodo(id){var t=todos.find(function(x){return x.id===id;});if(t){t.done=!t.done;save('todos',todos);renderAll();}}
+function toggleTodo(id){var t=todos.find(function(x){return x.id===id;});if(t){t.done=!t.done;if(t.done){t.doneAt=TODAY;}else{delete t.doneAt;}save('todos',todos);renderAll();}}
 function delSch(id){schedules=schedules.filter(function(x){return x.id!==id;});save('schedules',schedules);renderAll();}
 function delTodo(id){todos=todos.filter(function(x){return x.id!==id;});save('todos',todos);renderAll();}
 function delNote(id){notes=notes.filter(function(x){return x.id!==id;});save('notes',notes);renderAll();}
@@ -2035,11 +2035,30 @@ document.getElementById('quickParse').onclick=quickParse;
 document.getElementById('quickImport').onclick=quickImport;
 document.getElementById('quickMask').addEventListener('click',function(e){if(e.target===this)closeQuick();});
 
+/* ============ 已完成项自动清理（保留 N 天后删除） ============ */
+var DONE_KEEP_DAYS=14;
+function cleanupDone(){
+  var changed=false;
+  function sweep(arr){
+    for(var i=arr.length-1;i>=0;i--){
+      var it=arr[i];
+      if(it.done){
+        if(!it.doneAt)it.doneAt=TODAY;   // 旧数据无完成时间 → 从今天起算 14 天
+        if(daysBetween(it.doneAt,TODAY)>=DONE_KEEP_DAYS){arr.splice(i,1);changed=true;}
+      }
+    }
+  }
+  sweep(todos);
+  sweep(schedules);   // 仅非重复日程会置 done；重复日程走 doneDates，不受影响
+  if(changed){save('todos',todos);save('schedules',schedules);}
+}
+
 /* ============ 初始化 ============ */
 document.getElementById('topDate').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
 document.getElementById('schDate').value=TODAY;
 document.getElementById('todoDue').value='';
 migrateMembers();
+cleanupDone();
 renderAll();
 renderWeather();
 document.getElementById('btnSyncNow').onclick=function(){
